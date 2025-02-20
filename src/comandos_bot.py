@@ -27,5 +27,6 @@ async def comando_registro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if register_user(chat_id, telegram_username, nickname):
         display_name = nickname if nickname.strip() else telegram_username
         await update.message.reply_text(f"Registrado exitosamente como: {display_name}")
+        print(f"Nuevo usuario: {display_name}, con ID de chat: {chat_id}")
     else:
         await update.message.reply_text("Error: Ya estás registrado o no se pudo registrar.")

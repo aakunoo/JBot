@@ -3,11 +3,12 @@ from dotenv import load_dotenv
 load_dotenv() # Cargamos las variables de entorno (TOKEN, MONGO_URI, etc.)
 from telegram.ext import (
     ApplicationBuilder,
-    CommandHandler
+    CommandHandler, CallbackQueryHandler
 )
 from comandos_bot import comando_start, comando_help, comando_registro
 from src.reminders.recordatorios import conv_handler_recordatorios
 from src.reminders.mensaje_recordatorios import reprogramar_todos_los_recordatorios
+from src.reminders.gestion_recordatorios import procesar_eliminar_recordatorio
 
 
 def main():
@@ -27,7 +28,7 @@ def main():
     app.add_handler(CommandHandler("help", comando_help))
     app.add_handler(CommandHandler("register", comando_registro))
     app.add_handler(conv_handler_recordatorios)
-
+    app.add_handler(CallbackQueryHandler(procesar_eliminar_recordatorio, pattern="^eliminar_"))
 
     print("Bot en funcionamiento...")
     app.run_polling()

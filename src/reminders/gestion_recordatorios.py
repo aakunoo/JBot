@@ -1,4 +1,6 @@
 from datetime import datetime
+from threading import get_native_id
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from src.database import get_user, obtener_recordatorios, eliminar_recordatorio_por_id
@@ -63,11 +65,14 @@ async def procesar_eliminar_recordatorio(update: Update, context: ContextTypes.D
     query = update.callback_query
     await query.answer()
     data = query.data
+    chat_id = update.effective_chat.id
+    usuario = get_user(chat_id)
     if data.startswith("eliminar_"):
         recordatorio_id = data[len("eliminar_"):]
         resultado = eliminar_recordatorio_por_id(recordatorio_id)
         if resultado.deleted_count > 0:
             await query.edit_message_text("Recordatorio eliminado.")
+            print(f"El usuario {usuario} ha eliminado su recordatorio con ID {recordatorio_id} eliminado.")
         else:
             await query.edit_message_text("No se pudo eliminar el recordatorio.")
     else:

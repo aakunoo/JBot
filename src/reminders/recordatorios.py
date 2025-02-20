@@ -31,7 +31,6 @@ async def menu_recordatorios(update: Update, context: ContextTypes.DEFAULT_TYPE)
     teclado = [
         [InlineKeyboardButton("Crear un recordatorio", callback_data="menu_crear")],
         [InlineKeyboardButton("Ver mis recordatorios", callback_data="menu_ver")],
-        [InlineKeyboardButton("Editar un recordatorio", callback_data="menu_editar")],
         [InlineKeyboardButton("Eliminar un recordatorio", callback_data="menu_eliminar")]
     ]
     respuesta = InlineKeyboardMarkup(teclado)
@@ -74,9 +73,6 @@ async def recordatorios_menu_callback(update: Update, context: ContextTypes.DEFA
         from src.reminders.gestion_recordatorios import mostrar_recordatorios
         await mostrar_recordatorios(update, context)
         return ConversationHandler.END
-    elif opcion == "menu_editar":
-        await query.edit_message_text("La función de editar un recordatorio aún no está implementada.")
-        return ConversationHandler.END
     elif opcion == "menu_eliminar":
         await query.edit_message_text("Has seleccionado: Eliminar un recordatorio.")
         from src.reminders.gestion_recordatorios import eliminar_recordatorios
@@ -116,7 +112,7 @@ async def confirmar_descripcion(update: Update, context: ContextTypes.DEFAULT_TY
         return PEDIR_DESCRIPCION
     else:  # "desc_no"
         context.user_data["nuevo_recordatorio"]["descripcion"] = "Sin descripción"
-        await query.edit_message_text("No has indicado una descripción. ¿Cuándo debe iniciar el recordatorio? (Ejemplo: 2025-03-01 08:00)")
+        await query.edit_message_text("No has indicado una descripción.\n¿Cuándo debe iniciar el recordatorio? (Ejemplo: 2025-02-20 08:00)")
         return PEDIR_FECHA_INICIO
 
 '''
@@ -334,8 +330,9 @@ async def seleccionar_zona_horaria(update: Update, context: ContextTypes.DEFAULT
     }
     programar_recordatorio(context, r)
 
+    usuario = get_user(chat_id)
     await query.edit_message_text(text=f"¡Tu recordatorio ha sido creado!")
-    print(f"Recordatorio creado ID {id_insertado}")
+    print(f"El usuario {usuario} con chatID: {chat_id} ha creado un recordatorio con ID: {id_insertado}")
     return ConversationHandler.END
 
 
