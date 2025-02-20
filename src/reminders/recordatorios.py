@@ -8,16 +8,38 @@ from telegram.ext import (
     filters
 )
 from src.database import get_user, crear_recordatorio
-from mensaje_recordatorios import programar_recordatorio
+from src.reminders.mensaje_recordatorios import programar_recordatorio
 
 # Estados de la conversación
-PEDIR_TITULO = 0
-PEDIR_DESCRIPCION = 1
-PEDIR_FECHA_INICIO = 2
-PEDIR_FRECUENCIA = 3
-PEDIR_VALOR_CADA_X = 4
-PEDIR_FECHA_FIN = 5
-PEDIR_ZONA_HORARIA = 6
+MENU_RECORDATORIOS = 0
+PEDIR_TITULO = 1
+CONFIRMAR_DESCRIPCION = 2
+PEDIR_DESCRIPCION = 3
+PEDIR_FECHA_INICIO = 4
+PEDIR_FRECUENCIA = 5
+PEDIR_VALOR_CADA_X = 6
+PEDIR_FECHA_FIN = 7
+PEDIR_ZONA_HORARIA = 8
+
+
+'''
+-----------------------------------------------------------------------------------
+ Menú principal de recordatorios
+-----------------------------------------------------------------------------------'''
+
+async def menu_recordatorios(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    teclado = [
+        [InlineKeyboardButton("Crear un recordatorio", callback_data="menu_crear")],
+        [InlineKeyboardButton("Ver mis recordatorios", callback_data="menu_ver")],
+        [InlineKeyboardButton("Editar un recordatorio", callback_data="menu_editar")],
+        [InlineKeyboardButton("Eliminar un recordatorio", callback_data="menu_eliminar")]
+    ]
+    respuesta = InlineKeyboardMarkup(teclado)
+    if update.message:
+        await update.message.reply_text("¿Qué quieres hacer?", reply_markup=respuesta)
+    elif update.callback_query:
+        await update.callback_query.edit_message_text("¿Qué quieres hacer?", reply_markup=respuesta)
+    return MENU_RECORDATORIOS
 
 
 '''
@@ -32,8 +54,37 @@ async def comando_recordatorios(update: Update, context: ContextTypes.DEFAULT_TY
         return ConversationHandler.END
 
     # Iniciamos la conversación pidiendo el título
-    await update.message.reply_text("Vamos a crear un recordatorio.\nDime el título:")
+    await update.message.reply_text("Vamos a crear un recordatorio (/cancel para cancelarlo).\nDime el título:")
     return PEDIR_TITULO
+
+'''
+-----------------------------------------------------------------------------------
+ Callback del menu principal (Tras elegir un botón)
+-----------------------------------------------------------------------------------'''
+
+async def recordatorios_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    opcion = query.data
+    if opcion == "menu_crear":
+        await query.edit_message_text("Has seleccionado: Crear un recordatorio.\nDime el título:")
+        return PEDIR_TITULO
+    elif opcion == "menu_ver":
+        await query.edit_message_text("Has seleccionado: Ver mis recordatorios.")
+        from src.reminders.gestion_recordatorios import mostrar_recordatorios
+        await mostrar_recordatorios(update, context)
+        return ConversationHandler.END
+    elif opcion == "menu_editar":
+        await query.edit_message_text("La función de editar un recordatorio aún no está implementada.")
+        return ConversationHandler.END
+    elif opcion == "menu_eliminar":
+        await query.edit_message_text("Has seleccionado: Eliminar un recordatorio.")
+        from src.reminders.gestion_recordatorios import eliminar_recordatorios
+        await eliminar_recordatorios(update, context)
+        return ConversationHandler.END
+    else:
+        await query.edit_message_text("Opción no reconocida.")
+        return ConversationHandler.END
 
 '''
 -----------------------------------------------------------------------------------
@@ -43,8 +94,30 @@ async def comando_recordatorios(update: Update, context: ContextTypes.DEFAULT_TY
 async def pedir_titulo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nuevo_recordatorio"] = {}
     context.user_data["nuevo_recordatorio"]["titulo"] = update.message.text.strip()
-    await update.message.reply_text("¿Alguna descripción? (Opcional, puedes dejarlo en blanco)")
-    return PEDIR_DESCRIPCION
+
+    keyboard = [
+        [InlineKeyboardButton("Sí", callback_data="desc_si"),
+         InlineKeyboardButton("No", callback_data="desc_no")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("¿Quieres añadir una descripción al recordatorio?", reply_markup=reply_markup)
+    return CONFIRMAR_DESCRIPCION
+
+'''
+-----------------------------------------------------------------------------------
+ Paso 1.1: Confirmar si desea descripción
+----------------------------------------------------------------------------------- '''
+
+async def confirmar_descripcion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if query.data == "desc_si":
+        await query.edit_message_text("Introduce una descripción para el recordatorio:")
+        return PEDIR_DESCRIPCION
+    else:  # "desc_no"
+        context.user_data["nuevo_recordatorio"]["descripcion"] = "Sin descripción"
+        await query.edit_message_text("No has indicado una descripción. ¿Cuándo debe iniciar el recordatorio? (Ejemplo: 2025-03-01 08:00)")
+        return PEDIR_FECHA_INICIO
 
 '''
 -----------------------------------------------------------------------------------
@@ -53,7 +126,7 @@ async def pedir_titulo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def pedir_descripcion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nuevo_recordatorio"]["descripcion"] = update.message.text.strip()
-    await update.message.reply_text("¿Cuándo debe iniciar el recordatorio? (Ejemplo: 2025-03-01 08:00)")
+    await update.message.reply_text("¿Cuándo debe iniciar el recordatorio? (Ejemplo: 2025-02-20 08:00)")
     return PEDIR_FECHA_INICIO
 
 '''
@@ -105,28 +178,28 @@ async def seleccionar_frecuencia(update: Update, context: ContextTypes.DEFAULT_T
         frecuencia["tipo"] = datos_freq
         context.user_data["nuevo_recordatorio"]["frecuencia"] = frecuencia
 
-        # Pedir fecha/hora de fin
-        await query.message.reply_text(
-            "¿Fecha/hora de finalización? (YYYY-MM-DD HH:MM)\n"
-            "Si no hay fin, escribe 'ninguna'."
+        # Editar el mensaje para eliminar el teclado y mostrar la siguiente pregunta
+        await query.edit_message_text(
+            "Has seleccionado: {}.\n¿Fecha/hora de finalización? (YYYY-MM-DD HH:MM)\nSi no hay fin, escribe 'ninguna'.".format(datos_freq.capitalize())
         )
         return PEDIR_FECHA_FIN
 
     elif datos_freq == "cada_x_dias":
         frecuencia["tipo"] = "cada_x_dias"
         context.user_data["nuevo_recordatorio"]["frecuencia"] = frecuencia
-        await query.message.reply_text(
-            "¿Cada cuántos días deseas que se repita? (ej. 3)"
+        await query.edit_message_text(
+            "Has seleccionado: 'Cada X días'.\n¿Cada cuántos días deseas que se repita? (ej. 3)"
         )
         return PEDIR_VALOR_CADA_X
 
     elif datos_freq == "cada_x_horas":
         frecuencia["tipo"] = "cada_x_horas"
         context.user_data["nuevo_recordatorio"]["frecuencia"] = frecuencia
-        await query.message.reply_text(
-            "¿Cada cuántas horas deseas que se repita? (ej. 6)"
+        await query.edit_message_text(
+            "Has seleccionado: 'Cada X horas'.\n¿Cada cuántas horas deseas que se repita? (ej. 6)"
         )
         return PEDIR_VALOR_CADA_X
+
 
 '''
 -----------------------------------------------------------------------------------
@@ -163,7 +236,7 @@ async def pedir_fecha_fin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fecha_obj = datetime.strptime(texto, "%Y-%m-%d %H:%M")
             fecha_fin = fecha_obj
         except ValueError:
-            await update.message.reply_text("Formato inválido. Usaré None como fecha fin.")
+            await update.message.reply_text("Formato inválido. Usaré 'ninguna' como fecha fin.")
             fecha_fin = None
 
     context.user_data["nuevo_recordatorio"]["fecha_fin"] = fecha_fin
@@ -224,20 +297,22 @@ def generar_teclado_zonas():
 
     return filas
 
+
 '''
 -----------------------------------------------------------------------------------
  Paso 6: Seleccionar zona horaria (InlineKeyboard)
 ----------------------------------------------------------------------------------- '''
+
 async def seleccionar_zona_horaria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    zona = query.data  # p.ej. "UTC+1"
+    zona = query.data  # Ej: "UTC+1"
     context.user_data["nuevo_recordatorio"]["zona_horaria"] = zona
 
     datos = context.user_data["nuevo_recordatorio"]
     chat_id = query.message.chat_id
 
-    # Guardar en la BD (fechas naive + zona) -> se guardan tal cual
+    # Guardar en la BD (fechas naive + zona se guardan tal cual)
     id_insertado = crear_recordatorio(
         chat_id=chat_id,
         titulo=datos["titulo"],
@@ -248,7 +323,6 @@ async def seleccionar_zona_horaria(update: Update, context: ContextTypes.DEFAULT
         zona_horaria=datos["zona_horaria"]
     )
 
-    # Y programar -> se convertirá a UTC si es naive
     r = {
         "chat_id": chat_id,
         "titulo": datos["titulo"],
@@ -260,9 +334,10 @@ async def seleccionar_zona_horaria(update: Update, context: ContextTypes.DEFAULT
     }
     programar_recordatorio(context, r)
 
-    await query.message.reply_text(f"¡Tu recordatorio ha sido creado!")
+    await query.edit_message_text(text=f"¡Tu recordatorio ha sido creado!")
     print(f"Recordatorio creado ID {id_insertado}")
     return ConversationHandler.END
+
 
 '''
 -----------------------------------------------------------------------------------
@@ -279,9 +354,11 @@ async def cancelar_recordatorio(update: Update, context: ContextTypes.DEFAULT_TY
 from telegram.ext import ConversationHandler
 
 conv_handler_recordatorios = ConversationHandler(
-    entry_points=[CommandHandler("recordatorios", comando_recordatorios)],
+    entry_points=[CommandHandler("recordatorios", menu_recordatorios)],
     states={
+        MENU_RECORDATORIOS: [CallbackQueryHandler(recordatorios_menu_callback, pattern="^menu_")],
         PEDIR_TITULO: [MessageHandler(filters.TEXT & ~filters.COMMAND, pedir_titulo)],
+        CONFIRMAR_DESCRIPCION: [CallbackQueryHandler(confirmar_descripcion, pattern="^desc_")],
         PEDIR_DESCRIPCION: [MessageHandler(filters.TEXT & ~filters.COMMAND, pedir_descripcion)],
         PEDIR_FECHA_INICIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, pedir_fecha_inicio)],
         PEDIR_FRECUENCIA: [CallbackQueryHandler(seleccionar_frecuencia)],

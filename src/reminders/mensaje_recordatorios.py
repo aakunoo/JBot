@@ -25,7 +25,7 @@ async def enviar_recordatorio_repeticion(context: ContextTypes.DEFAULT_TYPE):
     datos = context.job.data
     titulo = datos.get("titulo", "")
     descripcion = datos.get("descripcion", "")
-    mensaje = f"Recuerda cumplir con ru recordatorio.\n\nTítulo: {titulo}\n{descripcion}"
+    mensaje = f"¡Recuerda cumplir con tu recordatorio!\n\nTítulo: {titulo}\n{descripcion}"
     await context.bot.send_message(chat_id=chat_id, text=mensaje)
 
 

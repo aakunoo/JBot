@@ -6,8 +6,8 @@ from telegram.ext import (
     CommandHandler
 )
 from comandos_bot import comando_start, comando_help, comando_registro
-from src.recordatorios import conv_handler_recordatorios
-from src.mensaje_recordatorios import reprogramar_todos_los_recordatorios
+from src.reminders.recordatorios import conv_handler_recordatorios
+from src.reminders.mensaje_recordatorios import reprogramar_todos_los_recordatorios
 
 
 def main():
@@ -27,6 +27,7 @@ def main():
     app.add_handler(CommandHandler("help", comando_help))
     app.add_handler(CommandHandler("register", comando_registro))
     app.add_handler(conv_handler_recordatorios)
+
 
     print("Bot en funcionamiento...")
     app.run_polling()
