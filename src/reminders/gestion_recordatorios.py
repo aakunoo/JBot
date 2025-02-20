@@ -1,6 +1,4 @@
 from datetime import datetime
-from threading import get_native_id
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from src.database import get_user, obtener_recordatorios, eliminar_recordatorio_por_id
