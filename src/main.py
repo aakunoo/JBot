@@ -8,7 +8,7 @@ from src.comandos_bot import comando_start, comando_help, comando_registro
 from src.reminders.recordatorios import conv_handler_recordatorios
 from src.reminders.mensaje_recordatorios import reprogramar_todos_los_recordatorios
 from src.reminders.gestion_recordatorios import procesar_eliminar_recordatorio
-from src.clima.clima_bot import conv_handler_clima_actual  # Importamos el handler del comando /clima
+from src.clima.clima_bot import conv_handler_clima  # Importamos el handler del comando /clima
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
     app.add_handler(CallbackQueryHandler(procesar_eliminar_recordatorio, pattern="^eliminar_"))
 
     # Handler para el comando /clima
-    app.add_handler(conv_handler_clima_actual)
+    app.add_handler(conv_handler_clima)
 
     print("Bot en funcionamiento...")
     app.run_polling()
