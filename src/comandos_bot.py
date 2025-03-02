@@ -8,11 +8,17 @@ async def comando_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def comando_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Comandos disponibles:\n"
-        "- /register <apodo> → Para registrarte. Si no indicas nada, se usará tu username.\n"
-        "- /recordatorios → Menú para gestionar recordatorios.\n"
+    help_text = (
+        "*Comandos disponibles:*\n\n"
+        "*Registro:*\n"
+        "/register <apodo> → Para registrarte. Si no indicas nada, se usará tu username.\n\n"
+        "*Comandos accesibles sólo para usuarios registrados:*\n"
+        "-----------------------------------------------------------------------------------\n"
+        "/recordatorios → Menú para gestionar recordatorios.\n"
+        "/clima <provincia> → Menú para saber el clima de una ciudad o gestionar tus recordatorios de clima. Si escribes una provincia junto al comando, te dirá el clima actual de esa provincia, si no, te llevará al menú."
     )
+    await update.message.reply_text(help_text, parse_mode="Markdown")
+
 
 async def comando_registro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id

@@ -12,13 +12,11 @@ db = client["jbot_db"]
 coleccion_usuarios = db["usuarios"]
 
 def register_user(chat_id, username, apodo):
-    """
-    Registra un usuario en la base de datos si aún no existe.
-    :param chat_id: Id del chat (número entero).
-    :param username: Username de Telegram.
-    :param apodo: Nickname proporcionado o None.
-    :return: True si se registró, False si ya existe.
-    """
+    '''
+    Función que registra un nuevo usuario en la base de datos,
+    almacenando su chat_id, username y un posible apodo. Devuelve
+    False si el usuario ya estaba registrado.
+    '''
     if coleccion_usuarios.find_one({"chat_id": chat_id}):
         return False  # El usuario ya está registrado.
 
@@ -31,46 +29,40 @@ def register_user(chat_id, username, apodo):
     coleccion_usuarios.insert_one(data_usuario)
     return True
 
+
 def get_user(chat_id):
-    """
-    Obtiene la información de un usuario registrado.
-    :param chat_id: Id del chat.
-    :return: Documento del usuario o None si no existe.
-    """
+    '''
+    Función que retorna el documento correspondiente a un usuario,
+    encontrándolo por chat_id. Devuelve None si no existe.
+    '''
     return coleccion_usuarios.find_one({"chat_id": chat_id})
 
 def update_user(chat_id, data):
-    """
-    Actualiza la información de un usuario.
-    :param chat_id: Id del chat.
-    :param data: Diccionario con los campos a actualizar.
-    """
+    '''
+    Función para actualizar campos específicos de un usuario,
+    por medio de un diccionario de cambios (data).
+    '''
     coleccion_usuarios.update_one({"chat_id": chat_id}, {"$set": data})
 
-def delete_user(chat_id):
-    """
-    Elimina el registro de un usuario.
-    :param chat_id: Id del chat.
-    """
-    coleccion_usuarios.delete_one({"chat_id": chat_id})
 
+def delete_user(chat_id):
+    '''
+    Función para eliminar completamente el registro de un usuario,
+    ubicado por su chat_id.
+    '''
+    coleccion_usuarios.delete_one({"chat_id": chat_id})
 
 # --------------------------------------------------------
 # Colección de recordatorios
 coleccion_recordatorios = db["recordatorios"]
 
+
+
 def crear_recordatorio(chat_id, titulo, descripcion, fecha_hora_inicio, frecuencia, fecha_hora_fin, zona_horaria):
-    """
-    Crea un nuevo recordatorio para un usuario.
-    :param chat_id: Id del chat (debe estar registrado).
-    :param titulo: Título del recordatorio.
-    :param descripcion: Descripción opcional.
-    :param fecha_hora_inicio: datetime con la fecha/hora de inicio.
-    :param frecuencia: Diccionario con la frecuencia (ej: {"tipo": "daily", "valor": None}).
-    :param fecha_hora_fin: datetime de fin (puede ser None).
-    :param zona_horaria: cadena que indica la zona horaria (ej: "UTC+1", "Europe/Madrid").
-    :return: El _id insertado.
-    """
+    '''
+    Crea un nuevo recordatorio en la colección "recordatorios",
+    retornando el _id insertado.
+    '''
     documento = {
         "chat_id": chat_id,
         "titulo": titulo,
@@ -84,25 +76,74 @@ def crear_recordatorio(chat_id, titulo, descripcion, fecha_hora_inicio, frecuenc
     resultado = coleccion_recordatorios.insert_one(documento)
     return resultado.inserted_id
 
+
 def obtener_recordatorios(chat_id):
-    """
-    Devuelve todos los recordatorios de un usuario específico.
-    :param chat_id: Id del chat del usuario.
-    :return: Lista de documentos de recordatorios.
-    """
+    '''
+    Devuelve una lista de todos los recordatorios que pertenezcan
+    al chat_id especificado.
+    '''
     return list(coleccion_recordatorios.find({"chat_id": chat_id}))
 
+
 def eliminar_recordatorio_por_id(id_recordatorio):
-    """
-    Elimina un recordatorio por su _id.
-    :param id_recordatorio: Cadena o tipo ObjectId del documento.
-    :return: Resultado de la operación delete_one.
-    """
+    '''
+    Elimina un recordatorio buscándolo por su ObjectId,
+    y retorna el resultado de la operación delete_one.
+    '''
     from bson.objectid import ObjectId
     return coleccion_recordatorios.delete_one({"_id": ObjectId(id_recordatorio)})
 
+
 def obtener_todos_los_recordatorios():
-    """
-    Devuelve todos los recordatorios (de todos los usuarios).
-    """
+    '''
+    Devuelve todos los recordatorios existentes (de todos los usuarios).
+    Se usa, por ejemplo, para reprogramar todo al iniciar.
+    '''
     return list(coleccion_recordatorios.find({}))
+
+
+# --------------------------------------------------------
+# Colección clima (Suscripciones para actualizaciones meteorológicas)
+# Colección clima (Suscripciones / recordatorios de clima)
+coleccion_clima = db["clima"]
+
+
+def crear_suscripcion_clima(chat_id, nombre_usuario, provincia, hora_config):
+    '''
+    Crea una suscripción (recordatorio) de clima en la colección "clima",
+    asociando un chat_id y datos de hora_config (hora, minuto, zona),
+    junto a la provincia y el nombre de usuario.
+    '''
+    documento = {
+        "chat_id": chat_id,
+        "nombre_usuario": nombre_usuario,
+        "provincia": provincia,
+        "hora_config": hora_config,  # {"hora":8, "minuto":30, "zona":"UTC+1"}
+        "creado_en": datetime.now(timezone.utc)
+    }
+    coleccion_clima.insert_one(documento)
+
+
+def obtener_recordatorios_clima(chat_id):
+    '''
+    Devuelve todos los recordatorios de clima para un chat_id concreto,
+    como lista de documentos.
+    '''
+    return list(coleccion_clima.find({"chat_id": chat_id}))
+
+
+def eliminar_recordatorio_clima(id_recordatorio):
+    '''
+    Elimina un recordatorio de clima buscándolo por su ObjectId.
+    '''
+    from bson.objectid import ObjectId
+    return coleccion_clima.delete_one({"_id": ObjectId(id_recordatorio)})
+
+
+def actualizar_recordatorio_clima(id_recordatorio, cambios):
+    '''
+    Actualiza un recordatorio de clima, identificándolo por su id_recordatorio,
+    y aplicando un diccionario de cambios (por ejemplo la nueva hora_config).
+    '''
+    from bson.objectid import ObjectId
+    return coleccion_clima.update_one({"_id": ObjectId(id_recordatorio)}, {"$set": cambios})
