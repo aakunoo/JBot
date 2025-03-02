@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Caso de Uso: Registrar Usuario (UC-03)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #ffebee;
+    }
+    h1 {
+      background-color: #550505; 
+      color: #ffffff;
+      padding: 10px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+      text-align: center;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      background-color: #fff;
+      border-radius: 5px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 2px solid #550505;
+    }
+    th {
+      background-color: #850202; 
+      color: #ffffff;
+      padding: 10px;
+      text-align: left;
+      border: 1px solid #000000;
+      vertical-align: top;
+    }
+    td {
+      padding: 10px;
+      border: 1px solid #050000;
+      vertical-align: top;
+      background-color: #fff;
+    }
+    .second-table th.section-title {
+      width: 20%;               
+      padding-left: 15px;       
+      padding-right: 5px;       
+      background-color: #850202;
+      color: #ffffff;
+      border-right: 1px solid #000000;
+    }
+    .section-title {
+      font-weight: bold;
+    }
+    ul, ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Caso de Uso: Registrar Usuario (UC-03)</h1>
+
+<!-- PRIMERA TABLA: Datos básicos del caso de uso -->
+<table>
+  <tr>
+    <th>ID del Caso de Uso</th>
+    <td>UC-03</td>
+  </tr>
+  <tr>
+    <th>Nombre del Caso de Uso</th>
+    <td>Registrar Usuario (/register)</td>
+  </tr>
+  <tr>
+    <th>Actor Principal</th>
+    <td>Usuario de Telegram</td>
+  </tr>
+  <tr>
+    <th>Descripción</th>
+    <td>
+      Permite al usuario darse de alta en el sistema, asociando su chat_id y 
+      posibles datos adicionales (username, fecha de registro, etc.) en 
+      la base de datos. Este comando habilita el uso de funcionalidades avanzadas 
+      como la gestión de recordatorios y la consulta de clima.
+    </td>
+  </tr>
+</table>
+
+<!-- SEGUNDA TABLA: Secciones clave del caso de uso -->
+<table class="second-table">
+  <tr>
+    <th class="section-title">Precondiciones</th>
+    <td>
+      <ul>
+        <li>El bot debe estar en funcionamiento y accesible en Telegram.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <th class="section-title">Postcondiciones</th>
+    <td>
+      <ul>
+        <li>El usuario queda registrado en la base de datos (colección "usuarios").</li>
+        <li>Se habilita el acceso a funcionalidades que requieren registro (/recordatorios, /clima, etc.).</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <th class="section-title">Curso Normal</th>
+    <td>
+      <ol>
+        <li>El usuario envía el comando <strong>/register</strong>.</li>
+        <li>El sistema comprueba si el usuario ya está registrado.</li>
+        <li>Si no lo está, el sistema crea un nuevo registro en la base de datos 
+            asociando el <em>chat_id</em> del usuario, username, fecha/hora de registro, etc.</li>
+        <li>El sistema confirma el registro y notifica al usuario que ya puede 
+            acceder a las funciones avanzadas.</li>
+      </ol>
+    </td>
+  </tr>
+  <tr>
+    <th class="section-title">Flujos Alternativos</th>
+    <td>
+      <ul>
+        <li><strong>F1: Usuario ya registrado</strong>
+          <ul>
+            <li>El sistema detecta que el usuario ya posee un registro en la base de datos.</li>
+            <li>Se muestra un mensaje indicando que ya está registrado.</li>
+            <li>Fin del caso de uso.</li>
+          </ul>
+        </li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <th class="section-title">Excepciones</th>
+    <td>
+      <ul>
+        <li><strong>E1: Error de conexión o escritura en la base de datos</strong>
+          <ul>
+            <li>Si no se puede completar el registro por problemas de infraestructura, se notifica al usuario.</li>
+            <li>El usuario puede intentar de nuevo más tarde.</li>
+          </ul>
+        </li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -110,58 +110,30 @@ def obtener_todos_los_recordatorios():
 
 # --------------------------------------------------------
 # Colección clima (Suscripciones para actualizaciones meteorológicas)
-
 coleccion_clima = db["clima"]
 
-def crear_suscripcion_clima(chat_id, nombre_usuario, provincia, hora_programada):
+def crear_suscripcion_clima(chat_id, nombre_usuario, provincia, hora_obj):
     """
-    Crea una nueva suscripción para recibir actualizaciones del clima.
-    :param chat_id: Id del chat del usuario.
-    :param nombre_usuario: Username de Telegram.
-    :param provincia: Provincia seleccionada.
-    :param hora_programada: Hora (cadena, ej. "08:30") a la que se enviará el mensaje diario.
+    Almacena en la BBDD la suscripción de clima.
+    Ejemplo de hora_obj: {"hora": 8, "minuto": 30, "zona": "UTC+1"}
     """
     documento = {
         "chat_id": chat_id,
         "nombre_usuario": nombre_usuario,
         "provincia": provincia,
-        "hora_programada": hora_programada,
+        "hora_config": hora_obj,
         "creado_en": datetime.now(timezone.utc)
     }
     coleccion_clima.insert_one(documento)
 
-def obtener_suscripciones_clima(chat_id=None):
+def leer_suscripcion_clima(chat_id):
     """
-    Obtiene las suscripciones de clima.
-    :param chat_id: (Opcional) Si se proporciona, devuelve las suscripciones de ese chat.
-    :return: Lista de documentos de suscripciones.
+    Ejemplo de lectura de la suscripción de un usuario (si la hubiera).
     """
-    if chat_id:
-        return list(coleccion_clima.find({"chat_id": chat_id}))
-    else:
-        return list(coleccion_clima.find({}))
-
-def actualizar_suscripcion_clima(chat_id, provincia=None, hora_programada=None):
-    """
-    Actualiza la suscripción de clima de un usuario.
-    :param chat_id: Id del chat del usuario.
-    :param provincia: (Opcional) Nueva provincia.
-    :param hora_programada: (Opcional) Nueva hora programada.
-    :return: Resultado de la operación update_one.
-    """
-    datos = {}
-    if provincia:
-        datos["provincia"] = provincia
-    if hora_programada:
-        datos["hora_programada"] = hora_programada
-    if datos:
-        return coleccion_clima.update_one({"chat_id": chat_id}, {"$set": datos})
-    return None
+    return coleccion_clima.find({"chat_id": chat_id})
 
 def eliminar_suscripcion_clima(chat_id):
     """
     Elimina la suscripción de clima de un usuario.
-    :param chat_id: Id del chat del usuario.
-    :return: Resultado de la operación delete_one.
     """
-    return coleccion_clima.delete_one({"chat_id": chat_id})
+    return coleccion_clima.delete_many({"chat_id": chat_id})

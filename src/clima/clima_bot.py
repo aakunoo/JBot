@@ -8,22 +8,28 @@ from telegram.ext import (
     ContextTypes
 )
 from datetime import datetime
-from src.clima.gestion_clima import obtener_clima_actual, programar_recordatorio_diario_clima
-from src.database import get_user, crear_suscripcion_clima
 import logging
 
-# Estados para Clima actual
+# Importamos nuestras funciones de gestión de clima y CRUD
+from src.clima.gestion_clima import obtener_clima_actual, programar_recordatorio_diario_clima
+from src.database import crear_suscripcion_clima
+from src.database import get_user
+
+# ----------------- ESTADOS DE LA CONVERSACIÓN ------------------
+
+# Clima actual
 STATE_MENU_PRINCIPAL = 0
 STATE_ACTUAL_COMUNIDAD = 1
 STATE_ACTUAL_PROVINCIA = 2
 
-# Estados para Recordatorio diario
+# Recordatorio diario
 STATE_DIARIO_COMUNIDAD = 10
 STATE_DIARIO_PROVINCIA = 11
 STATE_DIARIO_HORA = 12
 STATE_DIARIO_ZONA = 13
 
-# Diccionario de Comunidades Autónomas
+# ----------------- DICCIONARIO DE COMUNIDADES ------------------
+
 COMUNIDADES = {
     "Andalucía": {"flag": "☀️", "provincias": ["Almería", "Cádiz", "Córdoba", "Granada", "Huelva", "Jaén", "Málaga", "Sevilla"]},
     "Aragón": {"flag": "🌄", "provincias": ["Huesca", "Teruel", "Zaragoza"]},
@@ -46,14 +52,21 @@ COMUNIDADES = {
     "Melilla": {"flag": "🏰", "provincias": ["Melilla"]}
 }
 
-# Función de entrada para /clima.
+# ----------------- FLUJO /CLIMA: INICIO ------------------
+
 async def comando_clima(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Punto de entrada para /clima.
+    - Si se proporcionan argumentos (por ej. /clima Salamanca), se muestra el clima actual de esa provincia.
+    - Si no, se muestra un menú principal con 3 opciones: Clima actual, Recordatorio diario y Gestionar recordatorios.
+    """
     if context.args:
         provincia = " ".join(context.args)
         texto = obtener_clima_actual(provincia)
         await update.message.reply_text(texto)
         return ConversationHandler.END
     else:
+        # Mostramos el menú principal
         botones = [
             [InlineKeyboardButton("Clima actual", callback_data="opcion_actual")],
             [InlineKeyboardButton("Recordatorio diario", callback_data="opcion_diario")],
@@ -63,7 +76,7 @@ async def comando_clima(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Elige una opción:", reply_markup=teclado)
         return STATE_MENU_PRINCIPAL
 
-# Menú principal: según la opción seleccionada.
+# Maneja el menú principal
 async def menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -76,7 +89,7 @@ async def menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Esta opción está en desarrollo.")
         return ConversationHandler.END
 
-# Muestra el menú de Comunidades en 3 columnas.
+# Genera el teclado de comunidades en 3 columnas, con prefijo distinto para diferenciar Clima actual vs Recordatorio
 async def mostrar_menu_comunidades(query, next_state, prefix):
     comunidades_ordenadas = sorted(COMUNIDADES.keys())
     botones = []
@@ -94,24 +107,25 @@ async def mostrar_menu_comunidades(query, next_state, prefix):
     await query.edit_message_text("Selecciona una Comunidad Autónoma:", reply_markup=teclado)
     return next_state
 
-# Tras seleccionar la comunidad, se muestra el menú de provincias.
+# Tras seleccionar la comunidad, mostramos las provincias.
 async def seleccionar_comunidad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
     data = query.data
+    # Distinguimos entre "comunidad_" y "diario_comunidad_"
     if data.startswith("diario_comunidad_"):
         comunidad = data[len("diario_comunidad_"):]
         prefix = "diario_provincia_"
-    elif data.startswith("comunidad_"):
+    else:
         comunidad = data[len("comunidad_"):]
         prefix = "provincia_"
-    else:
-        comunidad = data
-        prefix = "provincia_"
+
     provincias = COMUNIDADES.get(comunidad, {}).get("provincias", [])
     if not provincias:
         await query.edit_message_text("No se encontraron provincias para esa comunidad.")
         return ConversationHandler.END
+
     botones = []
     fila = []
     for i, prov in enumerate(provincias):
@@ -121,22 +135,35 @@ async def seleccionar_comunidad(update: Update, context: ContextTypes.DEFAULT_TY
             fila = []
     if fila:
         botones.append(fila)
-    teclado = InlineKeyboardMarkup(botones)
-    msg = "Selecciona una provincia:" if prefix == "provincia_" else "Selecciona la provincia para el recordatorio diario:"
-    await query.edit_message_text(msg, reply_markup=teclado)
-    return STATE_ACTUAL_PROVINCIA if prefix == "provincia_" else STATE_DIARIO_PROVINCIA
 
-# Flujo Clima Actual: muestra el clima actual.
+    msg = "Selecciona una provincia:" if prefix == "provincia_" else "Selecciona la provincia para el recordatorio diario:"
+    teclado = InlineKeyboardMarkup(botones)
+    await query.edit_message_text(msg, reply_markup=teclado)
+
+    if prefix == "provincia_":
+        return STATE_ACTUAL_PROVINCIA
+    else:
+        return STATE_DIARIO_PROVINCIA
+
+# ----------------- CLIMA ACTUAL ------------------
+
 async def mostrar_clima_actual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
+    # Quitar el prefijo "provincia_"
     provincia = query.data[len("provincia_"):]
     texto = obtener_clima_actual(provincia)
     await query.edit_message_text(texto)
     return ConversationHandler.END
 
-# Flujo Recordatorio diario: tras seleccionar la provincia.
+# ----------------- RECORDATORIO DIARIO ------------------
+
 async def seleccionar_provincia_diario(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Tras seleccionar la comunidad en modo "Recordatorio diario",
+    el callback_data es "diario_provincia_<provincia>".
+    """
     query = update.callback_query
     await query.answer()
     provincia = query.data[len("diario_provincia_"):]
@@ -144,20 +171,22 @@ async def seleccionar_provincia_diario(update: Update, context: ContextTypes.DEF
     await query.edit_message_text("Introduce la hora a la que deseas recibir el recordatorio (HH:MM, 24h):")
     return STATE_DIARIO_HORA
 
-# Recibe la hora para el recordatorio diario.
 async def recibir_hora_diario(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Recibimos la hora en formato HH:MM y luego pedimos la zona horaria (teclado).
+    """
     texto = update.message.text.strip()
     try:
         hora = datetime.strptime(texto, "%H:%M").time()
     except ValueError:
         await update.message.reply_text("Formato incorrecto. Usa HH:MM (24h).")
         return STATE_DIARIO_HORA
+
     context.user_data["hora_diario"] = hora
     teclado = generar_teclado_zonas()
     await update.message.reply_text("Selecciona tu zona horaria:", reply_markup=teclado)
     return STATE_DIARIO_ZONA
 
-# Genera el teclado de zonas horarias en 3 columnas.
 def generar_teclado_zonas():
     zonas = [
         {"offset": "-7", "pais": "México", "bandera": "🇲🇽"},
@@ -180,11 +209,12 @@ def generar_teclado_zonas():
         {"offset": "+10", "pais": "Papúa Nueva Guinea", "bandera": "🇵🇬"},
         {"offset": "+11", "pais": "Australia", "bandera": "🇦🇺"}
     ]
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     botones = []
     fila = []
-    for i, zona in enumerate(zonas):
-        utc_str = f"UTC{zona['offset']}"
-        texto_boton = f"{zona['bandera']} ({utc_str})"
+    for i, z in enumerate(zonas):
+        utc_str = f"UTC{z['offset']}"
+        texto_boton = f"{z['bandera']} ({utc_str})"
         fila.append(InlineKeyboardButton(texto_boton, callback_data=utc_str))
         if (i + 1) % 3 == 0:
             botones.append(fila)
@@ -193,34 +223,55 @@ def generar_teclado_zonas():
         botones.append(fila)
     return InlineKeyboardMarkup(botones)
 
-# Tras seleccionar la zona horaria, almacena el recordatorio y programa el job.
 async def seleccionar_zona_diario(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Se almacena la suscripción en la BBDD y se programa el job.
+    """
     query = update.callback_query
     await query.answer()
-    zona = query.data  # Ejemplo: "UTC+1"
-    context.user_data["zona_diario"] = zona
+    zona = query.data  # Ej: "UTC+1"
     chat_id = query.message.chat_id
+
     provincia = context.user_data.get("provincia_diario")
     hora = context.user_data.get("hora_diario")
+
+    # Obtener el nombre o apodo
     usuario = get_user(chat_id)
     if usuario and usuario.get("apodo"):
         nombre = usuario["apodo"]
     else:
         nombre = query.from_user.username
-    # Se almacena el recordatorio en la BBDD (colección de clima)
+
+    # Almacenar en la BBDD
     hora_obj = {"hora": hora.hour, "minuto": hora.minute, "zona": zona}
     crear_suscripcion_clima(chat_id, nombre, provincia, hora_obj)
-    # Se programa el job; se incluye "nombre" en job.data para personalizar el saludo.
+
+    # Programar el job diario
     programar_recordatorio_diario_clima(context, chat_id, provincia, hora, zona, nombre)
-    await query.edit_message_text(f"Se ha creado un recordatorio diario para el clima de {provincia} a las {hora.strftime('%H:%M')} {zona}.")
+
+    await query.edit_message_text(
+        f"Se ha creado un recordatorio diario para el clima de {provincia} "
+        f"a las {hora.strftime('%H:%M')} {zona}."
+    )
     return ConversationHandler.END
+
+# ----------------- DEFINITION OF THE CONVERSATIONHANDLER -----------------
+
+from telegram.ext import ConversationHandler
 
 conv_handler_clima = ConversationHandler(
     entry_points=[CommandHandler("clima", comando_clima)],
     states={
-        STATE_MENU_PRINCIPAL: [CallbackQueryHandler(menu_principal, pattern="^(opcion_actual|opcion_diario|opcion_gestionar)$")],
+        # Menú principal
+        STATE_MENU_PRINCIPAL: [
+            CallbackQueryHandler(menu_principal, pattern="^(opcion_actual|opcion_diario|opcion_gestionar)$")
+        ],
+
+        # Clima actual
         STATE_ACTUAL_COMUNIDAD: [CallbackQueryHandler(seleccionar_comunidad, pattern="^comunidad_")],
         STATE_ACTUAL_PROVINCIA: [CallbackQueryHandler(mostrar_clima_actual, pattern="^provincia_")],
+
+        # Recordatorio diario
         STATE_DIARIO_COMUNIDAD: [CallbackQueryHandler(seleccionar_comunidad, pattern="^diario_comunidad_")],
         STATE_DIARIO_PROVINCIA: [CallbackQueryHandler(seleccionar_provincia_diario, pattern="^diario_provincia_")],
         STATE_DIARIO_HORA: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_hora_diario)],
