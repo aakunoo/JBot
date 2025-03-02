@@ -5,10 +5,10 @@ from telegram.ext import (
     MessageHandler,
     CallbackQueryHandler,
     CommandHandler,
-    filters
+    filters,
+    ConversationHandler
 )
 from src.database import get_user, crear_recordatorio
-from src.reminders.mensaje_recordatorios import programar_recordatorio
 
 # Estados de la conversación
 MENU_RECORDATORIOS = 0
@@ -21,19 +21,29 @@ PEDIR_VALOR_CADA_X = 6
 PEDIR_FECHA_FIN = 7
 PEDIR_ZONA_HORARIA = 8
 
-
 '''
 -----------------------------------------------------------------------------------
  Menú principal de recordatorios
 -----------------------------------------------------------------------------------'''
 
 async def menu_recordatorios(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Punto de entrada si el usuario escribe /recordatorios directamente.
+    Verificamos el registro.
+    """
+    chat_id = update.effective_chat.id
+    if not get_user(chat_id):
+        await update.message.reply_text("Primero debes registrarte con /register.")
+        return ConversationHandler.END
+
     teclado = [
         [InlineKeyboardButton("Crear un recordatorio", callback_data="menu_crear")],
         [InlineKeyboardButton("Ver mis recordatorios", callback_data="menu_ver")],
         [InlineKeyboardButton("Eliminar un recordatorio", callback_data="menu_eliminar")]
     ]
     respuesta = InlineKeyboardMarkup(teclado)
+
+    # Puede venir de un mensaje normal o de un callback
     if update.message:
         await update.message.reply_text("¿Qué quieres hacer?", reply_markup=respuesta)
     elif update.callback_query:
@@ -47,14 +57,12 @@ async def menu_recordatorios(update: Update, context: ContextTypes.DEFAULT_TYPE)
 -----------------------------------------------------------------------------------'''
 
 async def comando_recordatorios(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    if not get_user(chat_id):
-        await update.message.reply_text("Primero debes registrarte con /register.")
-        return ConversationHandler.END
+    """
+    Queda como un alias si alguien escribe /recordatorios.
+    Se llama a menu_recordatorios, que ya comprueba el registro.
+    """
+    return await menu_recordatorios(update, context)
 
-    # Iniciamos la conversación pidiendo el título
-    await update.message.reply_text("Vamos a crear un recordatorio (/cancel para cancelarlo).\nDime el título:")
-    return PEDIR_TITULO
 
 '''
 -----------------------------------------------------------------------------------
@@ -64,6 +72,13 @@ async def comando_recordatorios(update: Update, context: ContextTypes.DEFAULT_TY
 async def recordatorios_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
+    # Verificar registro de nuevo aquí por seguridad
+    chat_id = query.message.chat_id
+    if not get_user(chat_id):
+        await query.edit_message_text("Primero debes registrarte con /register.")
+        return ConversationHandler.END
+
     opcion = query.data
     if opcion == "menu_crear":
         await query.edit_message_text("Has seleccionado: Crear un recordatorio.\nDime el título:")
@@ -88,6 +103,13 @@ async def recordatorios_menu_callback(update: Update, context: ContextTypes.DEFA
 ----------------------------------------------------------------------------------- '''
 
 async def pedir_titulo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Revisamos registro también aquí, por si llamaran al callback de "PEDIR_TITULO"
+    # sin pasar por el menú.
+    chat_id = update.effective_chat.id
+    if not get_user(chat_id):
+        await update.message.reply_text("Primero debes registrarte con /register.")
+        return ConversationHandler.END
+
     context.user_data["nuevo_recordatorio"] = {}
     context.user_data["nuevo_recordatorio"]["titulo"] = update.message.text.strip()
 
@@ -104,15 +126,25 @@ async def pedir_titulo(update: Update, context: ContextTypes.DEFAULT_TYPE):
  Paso 1.1: Confirmar si desea descripción
 ----------------------------------------------------------------------------------- '''
 
-async def confirmar_descripcion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def confirmar_descripcion(update, context):
     query = update.callback_query
     await query.answer()
+
+    # check de registro
+    chat_id = query.message.chat_id
+    if not get_user(chat_id):
+        await query.edit_message_text("Primero debes registrarte con /register.")
+        return ConversationHandler.END
+
     if query.data == "desc_si":
         await query.edit_message_text("Introduce una descripción para el recordatorio:")
         return PEDIR_DESCRIPCION
     else:  # "desc_no"
         context.user_data["nuevo_recordatorio"]["descripcion"] = "Sin descripción"
-        await query.edit_message_text("No has indicado una descripción.\n¿Cuándo debe iniciar el recordatorio? (Ejemplo: 2025-02-20 08:00)")
+        await query.edit_message_text(
+            "No has indicado una descripción.\n"
+            "¿Cuándo debe iniciar el recordatorio? (Ejemplo: 2025-02-20 08:00)"
+        )
         return PEDIR_FECHA_INICIO
 
 '''
@@ -120,7 +152,12 @@ async def confirmar_descripcion(update: Update, context: ContextTypes.DEFAULT_TY
  Paso 2: Recoger descripción por texto
 ----------------------------------------------------------------------------------- '''
 
-async def pedir_descripcion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def pedir_descripcion(update, context):
+    chat_id = update.effective_chat.id
+    if not get_user(chat_id):
+        await update.message.reply_text("Primero debes registrarte con /register.")
+        return ConversationHandler.END
+
     context.user_data["nuevo_recordatorio"]["descripcion"] = update.message.text.strip()
     await update.message.reply_text("¿Cuándo debe iniciar el recordatorio? (Ejemplo: 2025-02-20 08:00)")
     return PEDIR_FECHA_INICIO
@@ -130,12 +167,16 @@ async def pedir_descripcion(update: Update, context: ContextTypes.DEFAULT_TYPE):
  Paso 3: Recoger fecha/hora de inicio por texto
 ----------------------------------------------------------------------------------- '''
 
-async def pedir_fecha_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def pedir_fecha_inicio(update, context):
+    chat_id = update.effective_chat.id
+    if not get_user(chat_id):
+        await update.message.reply_text("Primero debes registrarte con /register.")
+        return ConversationHandler.END
+
     texto = update.message.text.strip()
+    from datetime import datetime
     try:
-        # PARSEAMOS naive (no corresponde a ningun utc o local)
         fecha_obj = datetime.strptime(texto, "%Y-%m-%d %H:%M")
-        # Guardamos naive en user_data
         context.user_data["nuevo_recordatorio"]["fecha_inicio"] = fecha_obj
     except ValueError:
         await update.message.reply_text(
@@ -144,6 +185,7 @@ async def pedir_fecha_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return PEDIR_FECHA_INICIO
 
     # Menú para la frecuencia
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     teclado_frecuencia = [
         [InlineKeyboardButton("Ninguna", callback_data="ninguna")],
         [InlineKeyboardButton("Diaria", callback_data="diaria")],
@@ -163,9 +205,15 @@ async def pedir_fecha_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE)
  Paso 4: Seleccionar frecuencia (InlineKeyboard)
 ----------------------------------------------------------------------------------- '''
 
-async def seleccionar_frecuencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def seleccionar_frecuencia(update, context):
     query = update.callback_query
     await query.answer()
+
+    # check de registro
+    chat_id = query.message.chat_id
+    if not get_user(chat_id):
+        await query.edit_message_text("Primero debes registrarte con /register.")
+        return ConversationHandler.END
 
     datos_freq = query.data
     frecuencia = {"tipo": "ninguna", "valor": None}
@@ -173,10 +221,9 @@ async def seleccionar_frecuencia(update: Update, context: ContextTypes.DEFAULT_T
     if datos_freq in ["diaria", "semanal", "ninguna"]:
         frecuencia["tipo"] = datos_freq
         context.user_data["nuevo_recordatorio"]["frecuencia"] = frecuencia
-
-        # Editar el mensaje para eliminar el teclado y mostrar la siguiente pregunta
         await query.edit_message_text(
-            "Has seleccionado: {}.\n¿Fecha/hora de finalización? (YYYY-MM-DD HH:MM)\nSi no hay fin, escribe 'ninguna'.".format(datos_freq.capitalize())
+            f"Has seleccionado: {datos_freq}.\n"
+            "¿Fecha/hora de finalización? (YYYY-MM-DD HH:MM)\nSi no hay fin, escribe 'ninguna'."
         )
         return PEDIR_FECHA_FIN
 
@@ -196,13 +243,17 @@ async def seleccionar_frecuencia(update: Update, context: ContextTypes.DEFAULT_T
         )
         return PEDIR_VALOR_CADA_X
 
-
 '''
 -----------------------------------------------------------------------------------
  Paso 4.1: si elegimos cada_x_dias o cada_x_horas, pedimos el valor por texto
 ----------------------------------------------------------------------------------- '''
 
-async def pedir_valor_cada_x(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def pedir_valor_cada_x(update, context):
+    chat_id = update.effective_chat.id
+    if not get_user(chat_id):
+        await update.message.reply_text("Primero debes registrarte con /register.")
+        return ConversationHandler.END
+
     texto = update.message.text.strip()
     if not texto.isdigit():
         await update.message.reply_text("Por favor, escribe un número entero.")
@@ -223,12 +274,18 @@ async def pedir_valor_cada_x(update: Update, context: ContextTypes.DEFAULT_TYPE)
 -----------------------------------------------------------------------------------
  Paso 5: Recoger fecha/hora fin por texto
 ----------------------------------------------------------------------------------- '''
-async def pedir_fecha_fin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def pedir_fecha_fin(update, context):
+    chat_id = update.effective_chat.id
+    if not get_user(chat_id):
+        await update.message.reply_text("Primero debes registrarte con /register.")
+        return ConversationHandler.END
+
     texto = update.message.text.strip().lower()
     fecha_fin = None
+    from datetime import datetime
     if texto != "ninguna":
         try:
-            # Igualmente naive
             fecha_obj = datetime.strptime(texto, "%Y-%m-%d %H:%M")
             fecha_fin = fecha_obj
         except ValueError:
@@ -237,19 +294,15 @@ async def pedir_fecha_fin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["nuevo_recordatorio"]["fecha_fin"] = fecha_fin
 
-    # Menú de banderas + zonas horarias
+    # Teclado con zonas horarias
     teclado_zonas = generar_teclado_zonas()
+    from telegram import InlineKeyboardMarkup
     reply_markup = InlineKeyboardMarkup(teclado_zonas)
     await update.message.reply_text(
         "Selecciona tu zona horaria pulsando la bandera correspondiente:",
         reply_markup=reply_markup
     )
     return PEDIR_ZONA_HORARIA
-
-'''
------------------------------------------------------------------------------------
- Generar teclado de zonas horarias (UTC-7 ... UTC+10)
------------------------------------------------------------------------------------ '''
 
 def generar_teclado_zonas():
     from telegram import InlineKeyboardButton
@@ -275,6 +328,7 @@ def generar_teclado_zonas():
         {"offset": "+11", "pais": "Australia", "bandera": "🇦🇺"},
     ]
 
+    from telegram import InlineKeyboardMarkup
     botones = []
     for zona in zonas:
         utc_str = f"UTC{zona['offset']}"
@@ -293,54 +347,54 @@ def generar_teclado_zonas():
 
     return filas
 
-
-'''
------------------------------------------------------------------------------------
- Paso 6: Seleccionar zona horaria (InlineKeyboard)
------------------------------------------------------------------------------------ '''
-
-async def seleccionar_zona_horaria(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def seleccionar_zona_horaria(update, context):
     query = update.callback_query
     await query.answer()
-    zona = query.data  # Ej: "UTC+1"
+
+    chat_id = query.message.chat_id
+    if not get_user(chat_id):
+        await query.edit_message_text("Primero debes registrarte con /register.")
+        return ConversationHandler.END
+
+    zona = query.data
     context.user_data["nuevo_recordatorio"]["zona_horaria"] = zona
 
     datos = context.user_data["nuevo_recordatorio"]
-    chat_id = query.message.chat_id
+    from src.database import crear_recordatorio
+    from src.reminders.mensaje_recordatorios import programar_recordatorio
 
-    # Guardar en la BD (fechas naive + zona se guardan tal cual)
     id_insertado = crear_recordatorio(
         chat_id=chat_id,
         titulo=datos["titulo"],
         descripcion=datos["descripcion"],
-        fecha_hora_inicio=datos["fecha_inicio"],  # naive
+        fecha_hora_inicio=datos["fecha_inicio"],
         frecuencia=datos["frecuencia"],
-        fecha_hora_fin=datos["fecha_fin"],        # naive
+        fecha_hora_fin=datos["fecha_fin"],
         zona_horaria=datos["zona_horaria"]
     )
 
+    # Programar job
     r = {
         "chat_id": chat_id,
         "titulo": datos["titulo"],
         "descripcion": datos["descripcion"],
-        "fecha_hora_inicio": datos["fecha_inicio"],  # naive
+        "fecha_hora_inicio": datos["fecha_inicio"],
         "frecuencia": datos["frecuencia"],
-        "fecha_hora_fin": datos["fecha_fin"],        # naive
+        "fecha_hora_fin": datos["fecha_fin"],
         "zona_horaria": datos["zona_horaria"]
     }
     programar_recordatorio(context, r)
 
     usuario = get_user(chat_id)
-    await query.edit_message_text(text=f"¡Tu recordatorio ha sido creado!")
-    print(f"El usuario {usuario} con chatID: {chat_id} ha creado un recordatorio con ID: {id_insertado}")
+    await query.edit_message_text(text="¡Tu recordatorio ha sido creado!")
+    print(f"El usuario {usuario} con ID {chat_id} ha creado recordatorio con ID {id_insertado}")
     return ConversationHandler.END
-
 
 '''
 -----------------------------------------------------------------------------------
  Cancelar (opcional)
 ----------------------------------------------------------------------------------- '''
-async def cancelar_recordatorio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cancelar_recordatorio(update, context):
     await update.message.reply_text("Has cancelado el proceso.")
     return ConversationHandler.END
 
@@ -348,10 +402,9 @@ async def cancelar_recordatorio(update: Update, context: ContextTypes.DEFAULT_TY
 -----------------------------------------------------------------------------------
  Definición del ConversationHandler
 ----------------------------------------------------------------------------------- '''
-from telegram.ext import ConversationHandler
 
 conv_handler_recordatorios = ConversationHandler(
-    entry_points=[CommandHandler("recordatorios", menu_recordatorios)],
+    entry_points=[CommandHandler("recordatorios", comando_recordatorios)],
     states={
         MENU_RECORDATORIOS: [CallbackQueryHandler(recordatorios_menu_callback, pattern="^menu_")],
         PEDIR_TITULO: [MessageHandler(filters.TEXT & ~filters.COMMAND, pedir_titulo)],

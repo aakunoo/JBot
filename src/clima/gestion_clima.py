@@ -24,14 +24,19 @@ def obtener_clima_actual(provincia):
 
 def obtener_pronostico_clima(provincia, zona="UTC+0"):
     """
-    Consulta el endpoint 'forecast' de OpenWeather para obtener el pronóstico del día.
-    Devuelve (temp_actual, temp_min, temp_max, descripción, viento, nubes).
-    El filtrado se basa en la fecha local del usuario, calculada con la 'zona'.
+    Consulta el endpoint 'forecast' de OpenWeather para obtener:
+      - La temperatura actual (temp_actual).
+      - La temperatura mínima y máxima en las PRÓXIMAS 24 HORAS.
+      - La descripción, viento, nubes para la situación actual.
+
+    Retorna (temp_actual, temp_min, temp_max, descripcion, viento, nubes).
+
+    Si no se encuentran chunks en las próximas 24h, min y max quedan en None.
     """
     clave_api = os.getenv("OPENWEATHER_KEY")
     ciudad = f"{provincia},ES"
 
-    # Clima actual
+    # 1. Clima actual (temp_actual, descripción, viento, nubes)
     url_cur = f"https://api.openweathermap.org/data/2.5/weather?q={ciudad}&appid={clave_api}&units=metric&lang=es"
     rc = requests.get(url_cur)
     if rc.status_code == 200:
@@ -43,27 +48,41 @@ def obtener_pronostico_clima(provincia, zona="UTC+0"):
     else:
         temp_actual = descripcion = viento = nubes = None
 
-    # Calcular offset de la zona
+    # 2. Calculamos la hora local segun la zona, y definimos un rango de 24h a futuro
     try:
         offset_horas = int(zona[4:]) if zona[3] == '+' else -int(zona[4:])
     except ValueError:
         offset_horas = 0
-    ahora_usuario = datetime.now(timezone.utc) + timedelta(hours=offset_horas)
-    fecha_local = ahora_usuario.date()
 
-    # Pronóstico del día
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc + timedelta(hours=offset_horas)
+    limit_local = now_local + timedelta(hours=24)
+
+    # 3. Llamamos a forecast para las próximas horas
     url_f = f"https://api.openweathermap.org/data/2.5/forecast?q={ciudad}&appid={clave_api}&units=metric&lang=es"
     rf = requests.get(url_f)
     if rf.status_code == 200:
         data_f = rf.json()
-        forecast_hoy = [item for item in data_f.get("list", []) if
-            (datetime.fromtimestamp(item["dt"], tz=timezone.utc) + timedelta(hours=offset_horas)).date() == fecha_local]
-        if forecast_hoy:
-            temps = [it["main"]["temp"] for it in forecast_hoy]
+        forecast_list = data_f.get("list", [])
+
+        # 4. Filtramos para los Timestamps entre now_local y now_local + 24h
+        forecast_prox_24 = []
+        for item in forecast_list:
+            dt_utc = datetime.fromtimestamp(item["dt"], tz=timezone.utc)
+            # Convertimos ese timestamp a la hora local usando offset
+            dt_local = dt_utc + timedelta(hours=offset_horas)
+            # Si está dentro de las próximas 24h locales, lo incluimos
+            if now_local <= dt_local <= limit_local:
+                forecast_prox_24.append(item)
+
+        # 5. Obtenemos min y max de este intervalo
+        if forecast_prox_24:
+            temps = [f["main"]["temp"] for f in forecast_prox_24]
             temp_min = min(temps)
             temp_max = max(temps)
         else:
-            temp_min = temp_max = None
+            temp_min = None
+            temp_max = None
     else:
         temp_min = temp_max = None
 
@@ -90,29 +109,32 @@ async def enviar_recordatorio_diario_clima(context: ContextTypes.DEFAULT_TYPE):
         offset_horas = 0
     hora_local = datetime.now(timezone.utc) + timedelta(hours=offset_horas)
 
-    saludo = f"¡Buenos días, {nombre}!\n" if hora_local.hour < 12 else f"¡Hola, {nombre}!\n"
-    mensaje = saludo + f"Este es el clima que hará hoy en {provincia}:\n"
+    saludo = f"¡Buenos días <b>{nombre}</b>!\n" if hora_local.hour < 12 else f"¡Hola, {nombre}!\n"
+    mensaje = saludo + f"Este es el clima para las <b>PRÓXIMAS 24 HORAS</b> en {provincia}:\n"
 
     if None not in (temp_actual, temp_min, temp_max, desc, viento, nubes):
-        mensaje += f"Temperatura mínima: {temp_min}°C\n"
-        mensaje += f"Temperatura actual: {temp_actual}°C\n"
-        mensaje += f"Temperatura máxima: {temp_max}°C\n"
-        mensaje += f"Condición: {desc.capitalize()}\n"
-        mensaje += f"Viento: {viento} m/s\n"
-        mensaje += f"Nubes: {nubes}%\n"
-        # Ejemplos de recomendaciones
-        if temp_min < 10:
-            mensaje += "Hoy hará algo de frío, ¡abrígate bien!\n"
-        if temp_max > 25:
-            mensaje += "Hace bastante calor, ¡toca piscina!\n"
-        if viento and viento > 8:
-            mensaje += "Cuidado con el viento...\n"
-        if nubes and nubes > 80:
-            mensaje += "Podría llover, no vendría mal un paraguas.\n"
-    else:
-        mensaje += "No se pudo obtener toda la información."
+        mensaje += f"<b>Temperatura mínima</b>: {round(temp_min)}°C\n"
+        mensaje += f"<b>Temperatura actual</b>: {round(temp_actual)}°C\n"
+        mensaje += f"<b>Temperatura máxima</b>: {round(temp_max)}°C\n"
+        mensaje += f"<b>Condición</b>: {desc.capitalize()}\n"
+        mensaje += f"<b>Viento</b>: {viento} m/s\n"
+        mensaje += f"<b>Nubes</b>: {nubes}%\n"
 
-    await context.bot.send_message(chat_id=chat_id, text=mensaje)
+        if temp_min < 10:
+            mensaje += "Hoy hará un frrrrio que pela, abrigate!\n"
+        if temp_max > 25:
+            mensaje += "Hoy hará bastante calor, date un chapuzón!\n"
+        if viento and viento > 8:
+            mensaje += "Ve con cuidado no salgas volando hoy!\n"
+        if nubes and nubes > 80:
+            mensaje += "Podría llover, no te olvides del paraguas!\n"
+    else:
+        mensaje += (
+            "No se pudo obtener todos los datos.\n"
+            "Posiblemente no haya pronósticos próximos o la API no devolvió información."
+        )
+
+    await context.bot.send_message(chat_id=chat_id, text=mensaje, parse_mode="HTML")
 
 def convertir_a_utc(fecha_naive, zona_str):
     """
@@ -120,26 +142,30 @@ def convertir_a_utc(fecha_naive, zona_str):
     """
     if fecha_naive is None:
         return None
-    from datetime import timedelta, timezone
     signo = zona_str[3]
     try:
         offset_horas = int(zona_str[4:])
     except ValueError:
         offset_horas = 0
+    from datetime import timezone, timedelta
     delta = timedelta(hours=offset_horas if signo == '+' else -offset_horas)
     tz_local = timezone(delta)
     fecha_local = fecha_naive.replace(tzinfo=tz_local)
     return fecha_local.astimezone(timezone.utc)
 
-def programar_recordatorio_diario_clima(context, chat_id, provincia, hora_programada, zona_horaria, nombre):
+def programar_recordatorio_diario_clima(context, chat_id, provincia, hora_programada, zona_horaria, nombre, record_id):
     """
-    Programa un job diario a la hora indicada, convirtiéndola a UTC usando zona_horaria.
-    Se pasa 'nombre' en job.data para personalizar el saludo.
+    Programa un job repetitivo diario que, a la hora local especificada (convertida a UTC),
+    envíe el recordatorio de clima. Se incluye record_id en job.data para poder
+    cancelarlo/reprogramarlo si el usuario lo edita.
     """
+    from datetime import datetime, timezone, timedelta
+
     now_utc = datetime.now(timezone.utc)
     fecha_naive = datetime.combine(now_utc.date(), hora_programada)
     fecha_programada = convertir_a_utc(fecha_naive, zona_horaria)
 
+    # Si ya pasó la hora de hoy, lo programamos para mañana
     if fecha_programada < now_utc:
         fecha_programada += timedelta(days=1)
 
@@ -149,5 +175,11 @@ def programar_recordatorio_diario_clima(context, chat_id, provincia, hora_progra
         interval=interval,
         first=fecha_programada,
         chat_id=chat_id,
-        data={"provincia": provincia, "zona": zona_horaria, "nombre": nombre}
+        name=f"clima_{record_id}",
+        data={
+            "provincia": provincia,
+            "zona": zona_horaria,
+            "nombre": nombre,
+            "record_id": record_id  # ¡Importante para poder cancelar luego!
+        }
     )
