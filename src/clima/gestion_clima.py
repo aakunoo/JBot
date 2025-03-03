@@ -16,23 +16,39 @@ def obtener_clima_actual(provincia):
     resp = requests.get(url_api)
     if resp.status_code == 200:
         datos = resp.json()
-        temp = datos["main"]["temp"]
-        descripcion = datos["weather"][0]["description"]
-        return f"Clima en {provincia}: {temp}°C, {descripcion}"
+        temp_float = datos["main"]["temp"]
+        temp = int(round(temp_float))
+
+        desc = datos["weather"][0]["description"]
+
+        viento_m_s = datos["wind"]["speed"]
+        viento_kmh = int(round(viento_m_s * 3.6))
+
+        texto = (
+            f"Clima actual en {provincia}:\n"
+            f"---------------------------\n"
+            f"Temperatura: {temp} °C\n"
+            f"Estado: {desc.capitalize()}\n"
+            f"Viento: {viento_kmh} km/h\n"
+            f"---------------------------\n"
+        )
+        return texto
     else:
         return "No se pudo obtener el clima en este momento."
 
 def obtener_pronostico_clima(provincia, zona="UTC+0"):
     """
-    Consulta el endpoint 'forecast' de OpenWeather para obtener:
-      - La temperatura actual (temp_actual).
-      - La temperatura mínima y máxima en las PRÓXIMAS 24 HORAS.
-      - La descripción, viento, nubes para la situación actual.
+    Obtiene la temperatura actual, mínima y máxima en las próximas 24 horas,
+    así como la descripción del clima, el viento (convertido a km/h) y el
+    porcentaje de nubes. Las temperaturas y el viento se devuelven sin decimales.
 
-    Retorna (temp_actual, temp_min, temp_max, descripcion, viento, nubes).
+    Retorna:
+      (temp_actual, temp_min, temp_max, descripcion, viento_kmh, nubes)
 
-    Si no se encuentran chunks en las próximas 24h, min y max quedan en None.
+    donde cada uno puede ser None si no se pudo obtener.
+    El viento se expresa en km/h (en lugar de m/s).
     """
+
     clave_api = os.getenv("OPENWEATHER_KEY")
     ciudad = f"{provincia},ES"
 
@@ -41,14 +57,21 @@ def obtener_pronostico_clima(provincia, zona="UTC+0"):
     rc = requests.get(url_cur)
     if rc.status_code == 200:
         data_c = rc.json()
+        # Tomamos la temperatura y la descripción
         temp_actual = data_c["main"]["temp"]
         descripcion = data_c["weather"][0]["description"]
-        viento = data_c["wind"]["speed"]
+        viento_m_s = data_c["wind"]["speed"]
         nubes = data_c["clouds"]["all"]
-    else:
-        temp_actual = descripcion = viento = nubes = None
 
-    # 2. Calculamos la hora local segun la zona, y definimos un rango de 24h a futuro
+        temp_actual = int(round(temp_actual)) if temp_actual is not None else None
+        viento_kmh = int(round(viento_m_s * 3.6)) if viento_m_s is not None else None
+    else:
+        temp_actual = None
+        descripcion = None
+        viento_kmh = None
+        nubes = None
+
+    # 2. Calculamos la hora local según la zona y definimos un rango de 24h a futuro
     try:
         offset_horas = int(zona[4:]) if zona[3] == '+' else -int(zona[4:])
     except ValueError:
@@ -58,35 +81,35 @@ def obtener_pronostico_clima(provincia, zona="UTC+0"):
     now_local = now_utc + timedelta(hours=offset_horas)
     limit_local = now_local + timedelta(hours=24)
 
-    # 3. Llamamos a forecast para las próximas horas
+    # 3. Llamamos al endpoint de 'forecast' para las próximas horas
     url_f = f"https://api.openweathermap.org/data/2.5/forecast?q={ciudad}&appid={clave_api}&units=metric&lang=es"
     rf = requests.get(url_f)
     if rf.status_code == 200:
         data_f = rf.json()
         forecast_list = data_f.get("list", [])
 
-        # 4. Filtramos para los Timestamps entre now_local y now_local + 24h
+        # 4. Filtramos los Timestamps entre now_local y now_local + 24h
         forecast_prox_24 = []
         for item in forecast_list:
             dt_utc = datetime.fromtimestamp(item["dt"], tz=timezone.utc)
-            # Convertimos ese timestamp a la hora local usando offset
             dt_local = dt_utc + timedelta(hours=offset_horas)
-            # Si está dentro de las próximas 24h locales, lo incluimos
             if now_local <= dt_local <= limit_local:
                 forecast_prox_24.append(item)
 
-        # 5. Obtenemos min y max de este intervalo
+        # 5. Obtenemos temp_min y temp_max del intervalo
         if forecast_prox_24:
             temps = [f["main"]["temp"] for f in forecast_prox_24]
-            temp_min = min(temps)
-            temp_max = max(temps)
+            temp_min = int(round(min(temps)))
+            temp_max = int(round(max(temps)))
         else:
             temp_min = None
             temp_max = None
     else:
-        temp_min = temp_max = None
+        temp_min = None
+        temp_max = None
 
-    return temp_actual, temp_min, temp_max, descripcion, viento, nubes
+    return temp_actual, temp_min, temp_max, descripcion, viento_kmh, nubes
+
 
 async def enviar_recordatorio_diario_clima(context: ContextTypes.DEFAULT_TYPE):
     """
@@ -100,7 +123,7 @@ async def enviar_recordatorio_diario_clima(context: ContextTypes.DEFAULT_TYPE):
     zona = job.data.get("zona", "UTC+0")
     nombre = job.data.get("nombre", "")
 
-    (temp_actual, temp_min, temp_max, desc, viento, nubes) = obtener_pronostico_clima(provincia, zona)
+    (temp_actual, temp_min, temp_max, desc, viento_kmh, nubes) = obtener_pronostico_clima(provincia, zona)
 
     # Calcular la hora local para decidir el saludo.
     try:
@@ -110,21 +133,21 @@ async def enviar_recordatorio_diario_clima(context: ContextTypes.DEFAULT_TYPE):
     hora_local = datetime.now(timezone.utc) + timedelta(hours=offset_horas)
 
     saludo = f"¡Buenos días <b>{nombre}</b>!\n" if hora_local.hour < 12 else f"¡Hola, {nombre}!\n"
-    mensaje = saludo + f"Este es el clima para las <b>PRÓXIMAS 24 HORAS</b> en {provincia}:\n"
+    mensaje = saludo + f"Este es el clima para las <b>PRÓXIMAS 24 HORAS</b> en {provincia}:\n\n"
 
-    if None not in (temp_actual, temp_min, temp_max, desc, viento, nubes):
+    if None not in (temp_actual, temp_min, temp_max, desc, viento_kmh, nubes):
         mensaje += f"<b>Temperatura mínima</b>: {round(temp_min)}°C\n"
         mensaje += f"<b>Temperatura actual</b>: {round(temp_actual)}°C\n"
         mensaje += f"<b>Temperatura máxima</b>: {round(temp_max)}°C\n"
         mensaje += f"<b>Condición</b>: {desc.capitalize()}\n"
-        mensaje += f"<b>Viento</b>: {viento} m/s\n"
-        mensaje += f"<b>Nubes</b>: {nubes}%\n"
+        mensaje += f"<b>Viento</b>: {viento_kmh} km/h\n"
+        mensaje += f"<b>Nubes</b>: {nubes}%\n\n"
 
         if temp_min < 10:
             mensaje += "Hoy hará un frrrrio que pela, abrigate!\n"
         if temp_max > 25:
             mensaje += "Hoy hará bastante calor, date un chapuzón!\n"
-        if viento and viento > 8:
+        if viento_kmh and viento_kmh > 8:
             mensaje += "Ve con cuidado no salgas volando hoy!\n"
         if nubes and nubes > 80:
             mensaje += "Podría llover, no te olvides del paraguas!\n"

@@ -88,8 +88,8 @@ async def comando_clima(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         botones = [
             [InlineKeyboardButton("Clima actual", callback_data="opcion_actual")],
-            [InlineKeyboardButton("Recordatorio diario", callback_data="opcion_diario")],
-            [InlineKeyboardButton("Gestionar recordatorios", callback_data="opcion_gestionar")]
+            [InlineKeyboardButton("Recordatorio diario de clima", callback_data="opcion_diario")],
+            [InlineKeyboardButton("Gestionar recordatorios de clima", callback_data="opcion_gestionar")]
         ]
         teclado = InlineKeyboardMarkup(botones)
         await update.message.reply_text("Elige una opción:", reply_markup=teclado)

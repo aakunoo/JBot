@@ -2,17 +2,20 @@ from datetime import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from src.database import get_user, obtener_recordatorios, eliminar_recordatorio_por_id
+from src.reminders.mensaje_recordatorios import cancelar_job_por_record_id
 
-''' 
+'''
 ---------------------------------------------------------------------------
- Muestra todos los recordatorios del usuario con el chat_id que corresponde
---------------------------------------------------------------------------- '''
+Muestra todos los recordatorios del usuario con el chat_id que corresponde
+---------------------------------------------------------------------------
+'''
 async def mostrar_recordatorios(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     mensaje = update.message if update.message else update.callback_query.message
     if not get_user(chat_id):
         await mensaje.reply_text("Primero debes registrarte con /register.")
         return
+
     lista = obtener_recordatorios(chat_id)
     if not lista:
         await mensaje.reply_text("No tienes recordatorios.")
@@ -28,19 +31,21 @@ async def mostrar_recordatorios(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             fecha_str = "Sin fecha"
         texto += f"{indice}) {titulo} - {descripcion} (Inicio: {fecha_str})\n"
+
     await mensaje.reply_text(texto)
 
 '''
 ---------------------------------------------------------------------------
- Función para iniciar la eliminación de recordatorios
---------------------------------------------------------------------------- '''
-
+Función para iniciar la eliminación de recordatorios
+---------------------------------------------------------------------------
+'''
 async def eliminar_recordatorios(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     mensaje = update.message if update.message else update.callback_query.message
     if not get_user(chat_id):
         await mensaje.reply_text("Primero debes registrarte con /register.")
         return
+
     lista = obtener_recordatorios(chat_id)
     if not lista:
         await mensaje.reply_text("No tienes recordatorios para eliminar.")
@@ -49,28 +54,36 @@ async def eliminar_recordatorios(update: Update, context: ContextTypes.DEFAULT_T
     teclado = []
     for indice, recordatorio in enumerate(lista, start=1):
         titulo = recordatorio.get("titulo", "Sin título")
+        # Aquí formamos el callback_data para identificar
+        # cuál recordatorio se elimina
         callback_data = f"eliminar_{str(recordatorio['_id'])}"
         teclado.append([InlineKeyboardButton(f"{indice}) {titulo}", callback_data=callback_data)])
+
     reply_markup = InlineKeyboardMarkup(teclado)
     await mensaje.reply_text("Selecciona el recordatorio que deseas eliminar:", reply_markup=reply_markup)
 
 '''
 ---------------------------------------------------------------------------
- Callback para procesar la eliminación de un recordatorio
---------------------------------------------------------------------------- '''
-
+Callback para procesar la eliminación de un recordatorio
+---------------------------------------------------------------------------
+'''
 async def procesar_eliminar_recordatorio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
     chat_id = update.effective_chat.id
     usuario = get_user(chat_id)
+
     if data.startswith("eliminar_"):
         recordatorio_id = data[len("eliminar_"):]
+        # 1) Eliminar en la BD
         resultado = eliminar_recordatorio_por_id(recordatorio_id)
         if resultado.deleted_count > 0:
+            # 2) Cancelar job en job_queue
+            cancelar_job_por_record_id(context, recordatorio_id)
+
             await query.edit_message_text("Recordatorio eliminado.")
-            print(f"El usuario {usuario} ha eliminado su recordatorio con ID {recordatorio_id} eliminado.")
+            print(f"El usuario {usuario} ha eliminado su recordatorio con ID {recordatorio_id}.")
         else:
             await query.edit_message_text("No se pudo eliminar el recordatorio.")
     else:
