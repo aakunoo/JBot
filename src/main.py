@@ -1,14 +1,14 @@
 import os
 from dotenv import load_dotenv
-
 load_dotenv()  # Carga las variables de entorno
-
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler
 from src.comandos_bot import comando_start, comando_help, comando_registro
 from src.reminders.recordatorios import conv_handler_recordatorios
 from src.reminders.mensaje_recordatorios import reprogramar_todos_los_recordatorios
 from src.reminders.gestion_recordatorios import procesar_eliminar_recordatorio
-from src.clima.clima_bot import conv_handler_clima  # Importamos el handler del comando /clima
+from src.clima.clima_bot import conv_handler_clima
+from src.rpi.rpi_settings import get_system_info
+from src.rpi.rpi_config import get_config_handler
 
 
 def main():
@@ -34,6 +34,9 @@ def main():
 
     # Handler para el comando /clima
     app.add_handler(conv_handler_clima)
+
+    # Handler para el comando /RSettings
+    app.add_handler(get_config_handler())
 
     print("Bot en funcionamiento...")
     app.run_polling()
