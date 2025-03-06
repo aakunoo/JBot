@@ -5,22 +5,21 @@ import socket
 from datetime import datetime
 
 '''
-Devuelve una cadena con la salida del comando "ps aux", que muestra todos
-los procesos activos del sistema.
+Devuelve una cadena con la salida del comando "ps aux" usando la ruta completa.
 '''
 def get_active_processes():
     try:
-        output = subprocess.check_output(["ps", "aux"], universal_newlines=True)
+        output = subprocess.check_output(["/bin/ps", "aux"], universal_newlines=True)
         return output
     except Exception as e:
         return f"Error al obtener procesos: {str(e)}"
 
 '''
-Devuelve el tiempo de actividad del sistema usando el comando "uptime -p".
+Devuelve el tiempo de actividad del sistema usando el comando "uptime -p" con la ruta completa.
 '''
 def get_uptime():
     try:
-        output = subprocess.check_output(["uptime", "-p"], universal_newlines=True)
+        output = subprocess.check_output(["/usr/bin/uptime", "-p"], universal_newlines=True)
         return output.strip()
     except Exception as e:
         return f"Error al obtener uptime: {str(e)}"
