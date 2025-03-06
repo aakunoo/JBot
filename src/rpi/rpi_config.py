@@ -1,3 +1,4 @@
+import logging
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, ConversationHandler, ContextTypes
@@ -18,6 +19,8 @@ async def comando_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     admin_chat_id = os.getenv("ADMIN_CHAT_ID")
     chat_id = update.effective_chat.id
+    logging.info(f"Chat ID: {chat_id}")
+    logging.info(f"ADMIN_CHAT_ID: {admin_chat_id}")
 
     if str(chat_id) != str(admin_chat_id):
         await update.message.reply_text("No tienes permisos para usar este comando.")
