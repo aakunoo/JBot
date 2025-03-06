@@ -6,4 +6,5 @@ services:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - MONGO_URI=${MONGO_URI}
       - OPENWEATHER_KEY=${OPENWEATHER_KEY}
+      - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
     restart: unless-stopped
