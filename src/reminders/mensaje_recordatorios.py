@@ -37,18 +37,24 @@ async def enviar_recordatorio_repeticion(context: ContextTypes.DEFAULT_TYPE):
     mensaje = f"¡Recuerda cumplir con tu recordatorio!\n\nTítulo: {titulo}\n{descripcion}"
     await context.bot.send_message(chat_id=chat_id, text=mensaje)
 
+
 async def enviar_recordatorio_fin(context: ContextTypes.DEFAULT_TYPE):
     """
     Callback que se ejecuta en la hora de finalización del recordatorio.
-    Envía un mensaje notificando que el recordatorio ha terminado.
-    Opcionalmente, se podría eliminar de la base de datos si se desea.
+    Envía un mensaje notificando que el recordatorio ha terminado y cancela
+    todos los jobs asociados a ese recordatorio.
     """
     job = context.job
     chat_id = job.chat_id
     datos = job.data
     titulo = datos.get("titulo", "")
+    record_id = datos.get("record_id")
+
     mensaje = f"¡Finaliza el recordatorio!\nTítulo: {titulo}"
     await context.bot.send_message(chat_id=chat_id, text=mensaje)
+
+    # Cancelamos todos los jobs asociados a este recordatorio
+    cancelar_job_por_record_id(context, record_id)
 
 
 def timezone_from_string(zona_str: str):
