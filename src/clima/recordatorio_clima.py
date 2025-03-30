@@ -2,13 +2,21 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from datetime import datetime
-from src.database import crear_suscripcion_clima
+from src.database.models import (
+    crear_suscripcion_clima,
+    obtener_recordatorios_clima,
+    eliminar_recordatorio_clima
+)
 from src.clima.gestion_clima import programar_recordatorio_diario_clima
+from src.utils.logger import setup_logger
+
+logger = logging.getLogger(__name__)
 
 # Estados reutilizados en conversation
 STATE_DIARIO_PROVINCIA = 11
 STATE_DIARIO_HORA = 12
 STATE_DIARIO_ZONA = 13
+
 
 async def seleccionar_provincia_diario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -23,6 +31,7 @@ async def seleccionar_provincia_diario(update: Update, context: ContextTypes.DEF
         "Introduce la hora a la que deseas recibir el recordatorio (HH:MM, 24h):"
     )
     return STATE_DIARIO_HORA
+
 
 async def recibir_hora_diario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -39,6 +48,7 @@ async def recibir_hora_diario(update: Update, context: ContextTypes.DEFAULT_TYPE
     teclado = generar_teclado_zonas()
     await update.message.reply_text("Selecciona tu zona horaria:", reply_markup=teclado)
     return STATE_DIARIO_ZONA
+
 
 def generar_teclado_zonas():
     """
@@ -80,6 +90,7 @@ def generar_teclado_zonas():
         botones.append(fila)
     return InlineKeyboardMarkup(botones)
 
+
 async def seleccionar_zona_diario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Se crea la suscripción (crear_suscripcion_clima) y se programa el job (programar_recordatorio_diario_clima).
@@ -92,7 +103,7 @@ async def seleccionar_zona_diario(update: Update, context: ContextTypes.DEFAULT_
     provincia = context.user_data.get("provincia_diario")
     hora = context.user_data.get("hora_diario")
 
-    from src.database import get_user
+    from src.database.models import get_user
     usuario = get_user(chat_id)
     if usuario and usuario.get("apodo"):
         nombre = usuario["apodo"]
@@ -100,11 +111,12 @@ async def seleccionar_zona_diario(update: Update, context: ContextTypes.DEFAULT_
         nombre = query.from_user.username
 
     hora_obj = {"hora": hora.hour, "minuto": hora.minute, "zona": zona}
-    nuevo_id = crear_suscripcion_clima(chat_id, nombre, provincia, hora_obj)  # <-- devuelve el _id
+    nuevo_id = crear_suscripcion_clima(
+        chat_id, nombre, provincia, hora_obj)  # <-- devuelve el _id
     record_id = str(nuevo_id)
-    crear_suscripcion_clima(chat_id, nombre, provincia, hora_obj)
 
-    programar_recordatorio_diario_clima(context, chat_id, provincia, hora, zona, nombre, record_id)
+    programar_recordatorio_diario_clima(
+        context, chat_id, provincia, hora, zona, nombre, record_id)
 
     await query.edit_message_text(
         f"Se ha creado un recordatorio diario para el clima de {provincia} a las {hora.strftime('%H:%M')} {zona}."

@@ -1,16 +1,24 @@
 from datetime import datetime, timezone, timedelta
 from telegram.ext import ContextTypes
-from src.database import obtener_todos_los_recordatorios
+from src.database.models import obtener_recordatorios
+from src.utils.logger import setup_logger
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def ahora_utc():
     """Devuelve la hora actual en UTC con offset-aware. (Indica explicitamente que es UTC)"""
     return datetime.now(timezone.utc)
+
 
 '''
 -----------------------------------------------------------------------------------
 Funciones que se usan como callbacks para el JobQueue de recordatorios
 -----------------------------------------------------------------------------------
 '''
+
+
 async def enviar_recordatorio_inicio(context: ContextTypes.DEFAULT_TYPE):
     """
     Callback que se ejecuta en la hora de inicio del recordatorio.
@@ -23,6 +31,7 @@ async def enviar_recordatorio_inicio(context: ContextTypes.DEFAULT_TYPE):
     descripcion = datos.get("descripcion", "")
     mensaje = f"¡Empieza tu recordatorio!\n\nTítulo: {titulo}\n{descripcion}"
     await context.bot.send_message(chat_id=chat_id, text=mensaje)
+
 
 async def enviar_recordatorio_repeticion(context: ContextTypes.DEFAULT_TYPE):
     """
@@ -37,18 +46,24 @@ async def enviar_recordatorio_repeticion(context: ContextTypes.DEFAULT_TYPE):
     mensaje = f"¡Recuerda cumplir con tu recordatorio!\n\nTítulo: {titulo}\n{descripcion}"
     await context.bot.send_message(chat_id=chat_id, text=mensaje)
 
+
 async def enviar_recordatorio_fin(context: ContextTypes.DEFAULT_TYPE):
     """
     Callback que se ejecuta en la hora de finalización del recordatorio.
-    Envía un mensaje notificando que el recordatorio ha terminado.
-    Opcionalmente, se podría eliminar de la base de datos si se desea.
+    Envía un mensaje notificando que el recordatorio ha terminado y cancela
+    todos los jobs asociados a ese recordatorio.
     """
     job = context.job
     chat_id = job.chat_id
     datos = job.data
     titulo = datos.get("titulo", "")
+    record_id = datos.get("record_id")
+
     mensaje = f"¡Finaliza el recordatorio!\nTítulo: {titulo}"
     await context.bot.send_message(chat_id=chat_id, text=mensaje)
+
+    # Cancelamos todos los jobs asociados a este recordatorio
+    cancelar_job_por_record_id(context, record_id)
 
 
 def timezone_from_string(zona_str: str):
@@ -65,8 +80,16 @@ def timezone_from_string(zona_str: str):
     except ValueError:
         offset_horas = 0
 
+    # Ajustamos el offset solo para España y UTC
+    if zona_str == "UTC+1":  # España
+        offset_horas = 2  # Cambiamos a UTC+2
+    elif zona_str == "UTC+0":  # UTC
+        offset_horas = 1  # Cambiamos a UTC+1
+    # Para otras zonas horarias, mantenemos el offset original
+
     delta = timedelta(hours=offset_horas if signo == '+' else -offset_horas)
     return timezone(delta)
+
 
 def si_naive_pasar_utc(fecha, zona_str):
     """
@@ -87,11 +110,14 @@ def si_naive_pasar_utc(fecha, zona_str):
     # Convertimos a UTC
     return fecha_local.astimezone(timezone.utc)
 
+
 '''
 -----------------------------------------------------------------------------------
 Programar un recordatorio concreto en el JobQueue
 -----------------------------------------------------------------------------------
 '''
+
+
 def programar_recordatorio(context, recordatorio, record_id=None):
     """
     Programa en el JobQueue el inicio, la repetición y el fin del recordatorio,
@@ -181,11 +207,14 @@ def programar_recordatorio(context, recordatorio, record_id=None):
             }
         )
 
+
 '''
 -----------------------------------------------------------------------------------
 Cancelar un recordatorio del job_queue buscando su record_id
 -----------------------------------------------------------------------------------
 '''
+
+
 def cancelar_job_por_record_id(context, record_id):
     """
     Busca todos los jobs en job_queue y elimina aquel que
@@ -198,18 +227,22 @@ def cancelar_job_por_record_id(context, record_id):
         if job.data and job.data.get("record_id") == record_id:
             job.schedule_removal()
 
+
 '''
 -----------------------------------------------------------------------------------
 Reprogramar todos los recordatorios al iniciar el bot
 -----------------------------------------------------------------------------------
 '''
+
+
 async def reprogramar_todos_los_recordatorios(context):
     """
     Se llama al arrancar el bot para reprogramar cada recordatorio
     existente en la BD. Esto es útil por si el bot se reinicia y
     queremos restaurar los jobs.
     """
-    lista = obtener_todos_los_recordatorios()  # Función en database.py, sin filtrar por chat_id
+    lista = obtener_recordatorios(
+        None)  # None para obtener todos los recordatorios
     now_utc = ahora_utc()
 
     for r in lista:
