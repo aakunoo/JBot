@@ -1,7 +1,9 @@
 import logging
 import signal
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler
-from src.core.commands import comando_start, comando_help, comando_registro
+from src.core.commands import (
+    comando_start, comando_help, comando_registro, comando_nickname
+)
 from src.reminders.recordatorios import conv_handler_recordatorios
 from src.reminders.mensaje_recordatorios import reprogramar_todos_los_recordatorios
 from src.reminders.gestion_recordatorios import procesar_eliminar_recordatorio
@@ -39,6 +41,7 @@ def main():
         app.add_handler(CommandHandler("start", comando_start))
         app.add_handler(CommandHandler("help", comando_help))
         app.add_handler(CommandHandler("register", comando_registro))
+        app.add_handler(CommandHandler("setnickname", comando_nickname))
 
         # Handler para recordatorios
         app.add_handler(conv_handler_recordatorios)

@@ -1,24 +1,33 @@
+import logging
 from datetime import datetime, timezone
+from typing import Dict, List, Optional
 from src.database.connection import get_db, execute_transaction
 from src.utils.validators import validate_nickname, validate_username, validate_chat_id
 from src.utils.input_sanitizer import sanitize_text, sanitize_provincia
-from src.config.settings import SECURITY_CONFIG
-import logging
+from src.utils.logger import setup_logger
+from src.config.settings import BOT_CONFIG, SECURITY_CONFIG
+
 
 logger = logging.getLogger(__name__)
 db = get_db()
 
 
 @execute_transaction
-def register_user(chat_id, username, apodo):
-    try:
-        if not all([validate_chat_id(chat_id), validate_username(username)]):
-            logger.warning(
-                f"Datos de usuario inválidos: chat_id={chat_id}, username={username}")
-            return False
+def register_user(chat_id, apodo, username=None):
+    """
+    Registra un nuevo usuario en la base de datos.
 
-        if not validate_nickname(apodo) and apodo:
-            logger.warning(f"Apodo inválido: {apodo}")
+    Args:
+        chat_id: ID del chat del usuario
+        apodo: Apodo del usuario
+        username: Username de Telegram del usuario (opcional)
+
+    Returns:
+        bool: True si el registro fue exitoso, False en caso contrario
+    """
+    try:
+        if not validate_chat_id(chat_id):
+            logger.warning(f"Chat ID inválido: {chat_id}")
             return False
 
         if db.usuarios.find_one({"chat_id": chat_id}):
@@ -26,13 +35,14 @@ def register_user(chat_id, username, apodo):
             return False
 
         data_usuario = {
-            "username": sanitize_text(username[:SECURITY_CONFIG["max_username_length"]]),
-            "apodo": sanitize_text(apodo) if apodo and apodo.strip() != "" else None,
             "chat_id": chat_id,
+            "apodo": sanitize_text(apodo),
+            "username": sanitize_text(username) if username else None,
             "registro": datetime.now(timezone.utc)
         }
         db.usuarios.insert_one(data_usuario)
-        logger.info(f"Usuario registrado: {chat_id}")
+        logger.info(
+            f"Usuario registrado: {chat_id} (apodo: {apodo}, username: {username})")
         return True
     except Exception as e:
         logger.error(f"Error al registrar usuario: {e}", exc_info=True)
@@ -166,4 +176,27 @@ def ajustar_hora_recordatorios_clima():
     except Exception as e:
         logger.error(
             f"Error al ajustar hora de recordatorios: {e}", exc_info=True)
+        return False
+
+
+def update_user_nickname(chat_id: int, nuevo_apodo: str) -> bool:
+    """
+    Actualiza el apodo de un usuario.
+
+    Args:
+        chat_id: ID del chat del usuario
+        nuevo_apodo: Nuevo apodo para el usuario
+
+    Returns:
+        bool: True si la actualización fue exitosa, False en caso contrario
+    """
+    try:
+        result = db.usuarios.update_one(
+            {"chat_id": chat_id},
+            {"$set": {"apodo": sanitize_text(nuevo_apodo)}}
+        )
+        logger.info(f"Apodo actualizado para usuario {chat_id}")
+        return result.modified_count > 0
+    except Exception as e:
+        logger.error(f"Error al actualizar apodo: {e}")
         return False

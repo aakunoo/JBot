@@ -22,8 +22,19 @@ def validate_username(username: str) -> bool:
 
 
 def validate_chat_id(chat_id: int) -> bool:
-    """Valida que el chat_id sea un número válido."""
-    return isinstance(chat_id, int) and chat_id > 0
+    """
+    Valida que el chat_id sea un número entero positivo.
+
+    Args:
+        chat_id: ID del chat a validar
+
+    Returns:
+        bool: True si el chat_id es válido, False en caso contrario
+    """
+    try:
+        return isinstance(chat_id, int) and chat_id > 0
+    except Exception:
+        return False
 
 
 def validate_date(date_str: str) -> bool:
@@ -33,3 +44,31 @@ def validate_date(date_str: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+def validar_apodo(apodo: str) -> tuple[bool, str]:
+    """
+    Valida un apodo según las siguientes reglas:
+    - Longitud entre 2 y 15 caracteres
+    - No puede contener caracteres especiales
+    - No puede contener espacios
+
+    Returns:
+        tuple[bool, str]: (es_válido, mensaje_error)
+    """
+    if not apodo:
+        return False, "El apodo no puede estar vacío."
+
+    if len(apodo) < 2:
+        return False, "El apodo debe tener al menos 2 caracteres."
+
+    if len(apodo) > 15:
+        return False, "El apodo no puede tener más de 15 caracteres."
+
+    if not apodo.replace('_', '').isalnum():
+        return False, "El apodo solo puede contener letras, números y guiones bajos."
+
+    if ' ' in apodo:
+        return False, "El apodo no puede contener espacios."
+
+    return True, ""
