@@ -80,6 +80,13 @@ def timezone_from_string(zona_str: str):
     except ValueError:
         offset_horas = 0
 
+    # Ajustamos el offset solo para España y UTC
+    if zona_str == "UTC+1":  # España
+        offset_horas = 2  # Cambiamos a UTC+2
+    elif zona_str == "UTC+0":  # UTC
+        offset_horas = 1  # Cambiamos a UTC+1
+    # Para otras zonas horarias, mantenemos el offset original
+
     delta = timedelta(hours=offset_horas if signo == '+' else -offset_horas)
     return timezone(delta)
 
