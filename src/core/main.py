@@ -9,13 +9,10 @@ from src.clima.clima_bot import conv_handler_clima
 from src.rpi.rpi_settings import get_system_info
 from src.rpi.rpi_config import get_config_handler
 from src.config.settings import BOT_CONFIG, LOG_CONFIG
+from src.utils.logger import setup_logger
 
 # Configurar logging
-logging.basicConfig(
-    level=getattr(logging, LOG_CONFIG["level"]),
-    format=LOG_CONFIG["format"],
-    filename=LOG_CONFIG["file"]
-)
+setup_logger()
 logger = logging.getLogger(__name__)
 
 
@@ -54,12 +51,12 @@ def main():
         app.run_polling()
 
     except Exception as e:
-        logger.error(f"Error fatal en el bot: {e}")
+        logger.error(f"Error fatal en el bot: {e}", exc_info=True)
         raise
 
 
 async def error_handler(update, context):
-    logger.error(f"Error en el bot: {context.error}")
+    logger.error(f"Error en el bot: {context.error}", exc_info=True)
     if update:
         logger.error(f"Update que causó el error: {update}")
 

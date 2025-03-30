@@ -1,15 +1,23 @@
+from datetime import datetime, time
 from bson import ObjectId
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     filters,
-    ContextTypes
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler
 )
-from datetime import datetime
 
-from src.database import get_user
-from src.clima.gestion_clima import obtener_clima_actual
+from src.database.models import (
+    get_user,
+    obtener_recordatorios_clima,
+    eliminar_recordatorio_clima,
+    actualizar_recordatorio_clima,
+    coleccion_clima
+)
+from src.clima.gestion_clima import obtener_clima_actual, programar_recordatorio_diario_clima
 from src.clima.recordatorio_clima import (
     STATE_DIARIO_PROVINCIA,
     STATE_DIARIO_HORA,
@@ -18,6 +26,11 @@ from src.clima.recordatorio_clima import (
     recibir_hora_diario,
     seleccionar_zona_diario
 )
+from src.utils.logger import setup_logger
+import logging
+
+logger = logging.getLogger(__name__)
+
 '''
 --------------------------------------------------------------------------------
  ESTADOS DE LA CONVERSACIÓN
@@ -67,7 +80,6 @@ COMUNIDADES = {
 }
 
 
-
 async def comando_clima(update: Update, context: ContextTypes.DEFAULT_TYPE):
     '''
     Función de entrada para el comando /clima. Si el usuario escribe
@@ -87,14 +99,16 @@ async def comando_clima(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     else:
         botones = [
-            [InlineKeyboardButton("Clima actual", callback_data="opcion_actual")],
-            [InlineKeyboardButton("Recordatorio diario de clima", callback_data="opcion_diario")],
-            [InlineKeyboardButton("Gestionar recordatorios de clima", callback_data="opcion_gestionar")]
+            [InlineKeyboardButton(
+                "Clima actual", callback_data="opcion_actual")],
+            [InlineKeyboardButton(
+                "Recordatorio diario de clima", callback_data="opcion_diario")],
+            [InlineKeyboardButton(
+                "Gestionar recordatorios de clima", callback_data="opcion_gestionar")]
         ]
         teclado = InlineKeyboardMarkup(botones)
         await update.message.reply_text("Elige una opción:", reply_markup=teclado)
         return STATE_MENU_PRINCIPAL
-
 
 
 async def menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -116,9 +130,12 @@ async def menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif opcion == "opcion_gestionar":
         # Submenú con: Ver, Eliminar, Editar
         botones = [
-            [InlineKeyboardButton("Ver mis recordatorios", callback_data="gestionar_ver")],
-            [InlineKeyboardButton("Eliminar un recordatorio", callback_data="gestionar_eliminar")],
-            [InlineKeyboardButton("Editar un recordatorio", callback_data="gestionar_editar")]
+            [InlineKeyboardButton("Ver mis recordatorios",
+                                  callback_data="gestionar_ver")],
+            [InlineKeyboardButton("Eliminar un recordatorio",
+                                  callback_data="gestionar_eliminar")],
+            [InlineKeyboardButton("Editar un recordatorio",
+                                  callback_data="gestionar_editar")]
         ]
         teclado = InlineKeyboardMarkup(botones)
         await query.edit_message_text("¿Qué deseas hacer?", reply_markup=teclado)
@@ -141,7 +158,8 @@ async def mostrar_menu_comunidades(query, next_state, prefix):
     for i, comunidad in enumerate(comunidades_ordenadas):
         emoji = COMUNIDADES[comunidad]["flag"]
         texto_boton = f"{emoji} {comunidad}"
-        fila.append(InlineKeyboardButton(texto_boton, callback_data=f"{prefix}{comunidad}"))
+        fila.append(InlineKeyboardButton(
+            texto_boton, callback_data=f"{prefix}{comunidad}"))
         if (i + 1) % 3 == 0:
             botones.append(fila)
             fila = []
@@ -178,14 +196,16 @@ async def seleccionar_comunidad(update: Update, context: ContextTypes.DEFAULT_TY
     botones = []
     fila = []
     for i, prov in enumerate(provincias):
-        fila.append(InlineKeyboardButton(prov, callback_data=f"{prefix}{prov}"))
+        fila.append(InlineKeyboardButton(
+            prov, callback_data=f"{prefix}{prov}"))
         if (i + 1) % 2 == 0:
             botones.append(fila)
             fila = []
     if fila:
         botones.append(fila)
 
-    msg = ("Selecciona una provincia:" if prefix == "provincia_" else "Selecciona la provincia para el recordatorio diario:")
+    msg = ("Selecciona una provincia:" if prefix ==
+           "provincia_" else "Selecciona la provincia para el recordatorio diario:")
     teclado = InlineKeyboardMarkup(botones)
     await query.edit_message_text(msg, reply_markup=teclado)
     return next_state
@@ -219,7 +239,8 @@ async def submenu_gestionar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     if data == "gestionar_ver":
-        return await mostrar_recordatorios_clima_list(query, context)  # Para ver
+        # Para ver
+        return await mostrar_recordatorios_clima_list(query, context)
     elif data == "gestionar_eliminar":
         return await mostrar_recordatorios_clima_eliminar(query, context)
     elif data == "gestionar_editar":
@@ -234,7 +255,6 @@ async def mostrar_recordatorios_clima_list(query, context):
     Muestra en un mensaje la lista de recordatorios de clima existentes,
     sin permitir ninguna acción (sólo lectura).
     '''
-    from src.database import obtener_recordatorios_clima
     chat_id = query.message.chat_id
     lista = obtener_recordatorios_clima(chat_id)
     if not lista:
@@ -245,11 +265,10 @@ async def mostrar_recordatorios_clima_list(query, context):
     for rec in lista:
         prov = rec.get("provincia", "")
         hora_cfg = rec.get("hora_config", {})
-        hora_str = f"{hora_cfg.get('hora','--')}:{hora_cfg.get('minuto','--')} {hora_cfg.get('zona','')}"
+        hora_str = f"{hora_cfg.get('hora', '--')}:{hora_cfg.get('minuto', '--')} {hora_cfg.get('zona', '')}"
         texto += f"- {prov} @ {hora_str}\n"
     await query.edit_message_text(texto)
     return ConversationHandler.END
-
 
 
 async def mostrar_recordatorios_clima_eliminar(query, context):
@@ -257,7 +276,6 @@ async def mostrar_recordatorios_clima_eliminar(query, context):
     Muestra un listado de botones con cada recordatorio de clima,
     para que el usuario seleccione cuál desea eliminar.
     '''
-    from src.database import obtener_recordatorios_clima
     chat_id = query.message.chat_id
     lista = obtener_recordatorios_clima(chat_id)
     if not lista:
@@ -269,20 +287,21 @@ async def mostrar_recordatorios_clima_eliminar(query, context):
         _id = str(rec["_id"])
         prov = rec.get("provincia", "")
         hora_cfg = rec.get("hora_config", {})
-        hora_str = f"{hora_cfg.get('hora','--')}:{hora_cfg.get('minuto','--')} {hora_cfg.get('zona','')}"
+        hora_str = f"{hora_cfg.get('hora', '--')}:{hora_cfg.get('minuto', '--')} {hora_cfg.get('zona', '')}"
         texto = f"{prov} @ {hora_str}"
-        botones.append([InlineKeyboardButton(texto, callback_data=f"clima_eliminar_{_id}")])
+        botones.append([InlineKeyboardButton(
+            texto, callback_data=f"clima_eliminar_{_id}")])
 
     teclado = InlineKeyboardMarkup(botones)
     await query.edit_message_text("Selecciona el recordatorio que deseas eliminar:", reply_markup=teclado)
     return STATE_GESTIONAR_ELIMINAR
+
 
 async def eliminar_recordatorio_clima_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
     if data.startswith("clima_eliminar_"):
-        from src.database import eliminar_recordatorio_clima
         rec_id = data[len("clima_eliminar_"):]
         resultado = eliminar_recordatorio_clima(rec_id)
         if resultado.deleted_count > 0:
@@ -299,7 +318,6 @@ async def mostrar_recordatorios_clima_editar(query, context):
     Muestra un listado de recordatorios de clima para que el usuario
     seleccione cuál quiere editar (cambiando hora y zona).
     '''
-    from src.database import obtener_recordatorios_clima
     chat_id = query.message.chat_id
     lista = obtener_recordatorios_clima(chat_id)
     if not lista:
@@ -311,9 +329,10 @@ async def mostrar_recordatorios_clima_editar(query, context):
         _id = str(rec["_id"])
         prov = rec.get("provincia", "")
         hora_cfg = rec.get("hora_config", {})
-        hora_str = f"{hora_cfg.get('hora','--')}:{hora_cfg.get('minuto','--')} {hora_cfg.get('zona','')}"
+        hora_str = f"{hora_cfg.get('hora', '--')}:{hora_cfg.get('minuto', '--')} {hora_cfg.get('zona', '')}"
         texto = f"{prov} @ {hora_str}"
-        botones.append([InlineKeyboardButton(texto, callback_data=f"clima_editar_{_id}")])
+        botones.append([InlineKeyboardButton(
+            texto, callback_data=f"clima_editar_{_id}")])
 
     teclado = InlineKeyboardMarkup(botones)
     await query.edit_message_text("Selecciona el recordatorio que deseas editar:", reply_markup=teclado)
@@ -355,6 +374,7 @@ async def editar_recordatorio_clima_hora(update: Update, context: ContextTypes.D
     teclado = generar_teclado_zonas()
     await update.message.reply_text("Selecciona la nueva zona horaria:", reply_markup=teclado)
     return STATE_GESTIONAR_EDITAR_ZONA
+
 
 def generar_teclado_zonas():
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -410,7 +430,6 @@ async def editar_recordatorio_clima_zona(update: Update, context: ContextTypes.D
         await query.edit_message_text("Faltan datos para editar.")
         return ConversationHandler.END
 
-    from src.database import actualizar_recordatorio_clima, coleccion_clima
     # 1) Actualizar en BD
     cambios = {
         "hora_config": {
@@ -432,13 +451,7 @@ async def editar_recordatorio_clima_zona(update: Update, context: ContextTypes.D
         hora_cfg = doc["hora_config"]
         nombre = doc["nombre_usuario"]
 
-        from datetime import time
-        from src.clima.gestion_clima import programar_recordatorio_diario_clima
-
-        hh = hora_cfg.get("hora", 8)
-        mm = hora_cfg.get("minuto", 0)
-        zona_horaria = hora_cfg.get("zona", "UTC+0")
-        hora_obj = time(hh, mm)
+        hora_obj = time(hora.hour, hora.minute)
 
         # Reprogramar con record_id
         programar_recordatorio_diario_clima(
@@ -446,13 +459,14 @@ async def editar_recordatorio_clima_zona(update: Update, context: ContextTypes.D
             chat_id,
             provincia,
             hora_obj,
-            zona_horaria,
+            zona,
             nombre,
             rec_id
         )
 
     await query.edit_message_text("¡Recordatorio actualizado con la nueva hora!")
     return ConversationHandler.END
+
 
 def cancelar_job_clima(context, record_id):
     """
@@ -463,15 +477,16 @@ def cancelar_job_clima(context, record_id):
         if job.data and job.data.get("record_id") == record_id:
             job.schedule_removal()
 
+
 ''' CONVERSATION HANDLER '''
-from telegram.ext import ConversationHandler, MessageHandler
 
 conv_handler_clima = ConversationHandler(
     entry_points=[CommandHandler("clima", comando_clima)],
     states={
         # Menú principal
         STATE_MENU_PRINCIPAL: [
-            CallbackQueryHandler(menu_principal, pattern="^(opcion_actual|opcion_diario|opcion_gestionar)$")
+            CallbackQueryHandler(
+                menu_principal, pattern="^(opcion_actual|opcion_diario|opcion_gestionar)$")
         ],
         # Clima actual
         STATE_ACTUAL_COMUNIDAD: [CallbackQueryHandler(seleccionar_comunidad, pattern="^comunidad_")],
@@ -485,23 +500,28 @@ conv_handler_clima = ConversationHandler(
 
         # Gestionar recordatorios
         STATE_GESTIONAR_MENU: [
-            CallbackQueryHandler(submenu_gestionar, pattern="^(gestionar_ver|gestionar_eliminar|gestionar_editar)$")
+            CallbackQueryHandler(
+                submenu_gestionar, pattern="^(gestionar_ver|gestionar_eliminar|gestionar_editar)$")
         ],
         STATE_GESTIONAR_ELIMINAR: [
-            CallbackQueryHandler(eliminar_recordatorio_clima_callback, pattern="^clima_eliminar_")
+            CallbackQueryHandler(
+                eliminar_recordatorio_clima_callback, pattern="^clima_eliminar_")
         ],
         STATE_GESTIONAR_EDITAR: [
-            CallbackQueryHandler(editar_recordatorio_clima_seleccionado, pattern="^clima_editar_")
+            CallbackQueryHandler(
+                editar_recordatorio_clima_seleccionado, pattern="^clima_editar_")
         ],
         STATE_GESTIONAR_EDITAR_HORA: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, editar_recordatorio_clima_hora)
+            MessageHandler(filters.TEXT & ~filters.COMMAND,
+                           editar_recordatorio_clima_hora)
         ],
         STATE_GESTIONAR_EDITAR_ZONA: [
             CallbackQueryHandler(editar_recordatorio_clima_zona)
         ]
     },
     fallbacks=[
-        CommandHandler("cancel", lambda update, context: update.message.reply_text("Operación cancelada."))
+        CommandHandler("cancel", lambda update,
+                       context: update.message.reply_text("Operación cancelada."))
     ],
     per_user=True,
     per_chat=True

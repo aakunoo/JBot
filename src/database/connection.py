@@ -3,6 +3,7 @@ from pymongo.errors import ConnectionFailure, OperationFailure
 from src.config.settings import DB_CONFIG
 import logging
 import time
+import atexit
 
 logger = logging.getLogger(__name__)
 
@@ -63,5 +64,32 @@ def get_db():
         return _db
 
 
+def close_connection():
+    global _client
+    if _client:
+        _client.close()
+        logger.info("Conexión a MongoDB cerrada")
+
+
+# Registrar función de cierre
+atexit.register(close_connection)
+
 # Inicializar conexión al importar el módulo
 _connect_with_retry()
+
+
+def execute_transaction(func):
+    """Decorador para ejecutar operaciones en transacciones"""
+    def wrapper(*args, **kwargs):
+        session = _client.start_session()
+        try:
+            with session.start_transaction():
+                result = func(*args, **kwargs)
+                session.commit_transaction()
+                return result
+        except Exception as e:
+            session.abort_transaction()
+            raise
+        finally:
+            session.end_session()
+    return wrapper

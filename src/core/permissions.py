@@ -1,4 +1,8 @@
 from src.config.settings import BOT_CONFIG
+from src.utils.logger import setup_logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def is_admin(chat_id: int) -> bool:

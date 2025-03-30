@@ -1,9 +1,14 @@
+import logging
+from src.utils.logger import setup_logger
+from telegram.ext import ContextTypes
+from datetime import datetime, timedelta, timezone
+import requests
 import os
 from dotenv import load_dotenv
 load_dotenv()
-import requests
-from datetime import datetime, timedelta, timezone
-from telegram.ext import ContextTypes
+
+logger = logging.getLogger(__name__)
+
 
 def obtener_clima_actual(provincia):
     """
@@ -36,6 +41,7 @@ def obtener_clima_actual(provincia):
     else:
         return "No se pudo obtener el clima en este momento."
 
+
 def obtener_pronostico_clima(provincia, zona="UTC+0"):
     """
     Obtiene la temperatura actual, mínima y máxima en las próximas 24 horas,
@@ -63,8 +69,10 @@ def obtener_pronostico_clima(provincia, zona="UTC+0"):
         viento_m_s = data_c["wind"]["speed"]
         nubes = data_c["clouds"]["all"]
 
-        temp_actual = int(round(temp_actual)) if temp_actual is not None else None
-        viento_kmh = int(round(viento_m_s * 3.6)) if viento_m_s is not None else None
+        temp_actual = int(round(temp_actual)
+                          ) if temp_actual is not None else None
+        viento_kmh = int(round(viento_m_s * 3.6)
+                         ) if viento_m_s is not None else None
     else:
         temp_actual = None
         descripcion = None
@@ -123,7 +131,8 @@ async def enviar_recordatorio_diario_clima(context: ContextTypes.DEFAULT_TYPE):
     zona = job.data.get("zona", "UTC+0")
     nombre = job.data.get("nombre", "")
 
-    (temp_actual, temp_min, temp_max, desc, viento_kmh, nubes) = obtener_pronostico_clima(provincia, zona)
+    (temp_actual, temp_min, temp_max, desc, viento_kmh,
+     nubes) = obtener_pronostico_clima(provincia, zona)
 
     # Calcular la hora local para decidir el saludo.
     try:
@@ -133,7 +142,8 @@ async def enviar_recordatorio_diario_clima(context: ContextTypes.DEFAULT_TYPE):
     hora_local = datetime.now(timezone.utc) + timedelta(hours=offset_horas)
 
     saludo = f"¡Buenos días <b>{nombre}</b>!\n" if hora_local.hour < 12 else f"¡Hola, {nombre}!\n"
-    mensaje = saludo + f"Este es el clima para las <b>PRÓXIMAS 24 HORAS</b> en {provincia}:\n\n"
+    mensaje = saludo + \
+        f"Este es el clima para las <b>PRÓXIMAS 24 HORAS</b> en {provincia}:\n\n"
 
     if None not in (temp_actual, temp_min, temp_max, desc, viento_kmh, nubes):
         mensaje += f"<b>Temperatura mínima</b>: {round(temp_min)}°C\n"
@@ -159,6 +169,7 @@ async def enviar_recordatorio_diario_clima(context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(chat_id=chat_id, text=mensaje, parse_mode="HTML")
 
+
 def convertir_a_utc(fecha_naive, zona_str):
     """
     Convierte 'fecha_naive' (que es naive) interpretado en zona_str (ej: "UTC+1") a fecha en UTC.
@@ -175,6 +186,7 @@ def convertir_a_utc(fecha_naive, zona_str):
     tz_local = timezone(delta)
     fecha_local = fecha_naive.replace(tzinfo=tz_local)
     return fecha_local.astimezone(timezone.utc)
+
 
 def programar_recordatorio_diario_clima(context, chat_id, provincia, hora_programada, zona_horaria, nombre, record_id):
     """

@@ -1,5 +1,9 @@
+import logging
 import os
 from dotenv import load_dotenv
+
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 

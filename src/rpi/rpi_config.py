@@ -1,14 +1,19 @@
 import os
 import logging
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, ContextTypes, ConversationHandler
 from src.rpi.rpi_settings import get_system_info
+from src.utils.logger import setup_logger
+
+logger = logging.getLogger(__name__)
 
 '''
 --------------------------------------------------------------------------------
 comando_config
 --------------------------------------------------------------------------------
 '''
+
+
 async def comando_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Punto de entrada para el comando /config.
@@ -37,6 +42,8 @@ Devuelve un ConversationHandler para el comando /config, que ahora
 muestra la información de la Raspberry sin desplegar un menú.
 --------------------------------------------------------------------------------
 '''
+
+
 def get_config_handler():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("config", comando_config)],
