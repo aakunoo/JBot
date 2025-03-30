@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure, OperationFailure
+from pymongo.errors import ConnectionFailure, OperationFailure, ServerSelectionTimeoutError
 from src.config.settings import DB_CONFIG
 import logging
 import time
@@ -18,12 +18,17 @@ def _connect_with_retry():
     global _client, _db
     for attempt in range(_max_retries):
         try:
+            if _client:
+                _client.close()
+
             _client = MongoClient(
                 DB_CONFIG["uri"],
                 maxPoolSize=DB_CONFIG["max_pool_size"],
                 serverSelectionTimeoutMS=5000,
                 connectTimeoutMS=5000,
-                socketTimeoutMS=5000
+                socketTimeoutMS=5000,
+                retryWrites=True,
+                w='majority'
             )
             # Verificar conexión
             _client.server_info()
@@ -31,7 +36,7 @@ def _connect_with_retry():
             _setup_indexes()
             logger.info("Conexión a MongoDB establecida correctamente")
             return
-        except ConnectionFailure as e:
+        except (ConnectionFailure, ServerSelectionTimeoutError) as e:
             logger.error(f"Intento {attempt + 1} fallido: {e}")
             if attempt < _max_retries - 1:
                 time.sleep(_retry_delay)
@@ -58,8 +63,9 @@ def get_db():
         # Verificar conexión antes de devolver
         _client.server_info()
         return _db
-    except ConnectionFailure:
-        logger.warning("Conexión perdida, intentando reconectar...")
+    except (ConnectionFailure, ServerSelectionTimeoutError, AttributeError):
+        logger.warning(
+            "Conexión perdida o no inicializada, intentando reconectar...")
         _connect_with_retry()
         return _db
 
@@ -67,8 +73,11 @@ def get_db():
 def close_connection():
     global _client
     if _client:
-        _client.close()
-        logger.info("Conexión a MongoDB cerrada")
+        try:
+            _client.close()
+            logger.info("Conexión a MongoDB cerrada")
+        except Exception as e:
+            logger.error(f"Error al cerrar conexión: {e}")
 
 
 # Registrar función de cierre

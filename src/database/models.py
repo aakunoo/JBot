@@ -135,3 +135,35 @@ def actualizar_recordatorio_clima(id_recordatorio, cambios):
 
 # Colección de clima para acceso directo
 coleccion_clima = db.clima
+
+
+def ajustar_hora_recordatorios_clima():
+    """
+    Ajusta la hora de todos los recordatorios de clima existentes
+    para compensar el cambio horario.
+    """
+    try:
+        # Obtener todos los recordatorios
+        recordatorios = list(db.clima.find({}))
+
+        for recordatorio in recordatorios:
+            hora_config = recordatorio.get("hora_config", {})
+            if not hora_config:
+                continue
+
+            # Ajustar la hora (restar 1 hora)
+            hora_actual = hora_config.get("hora", 0)
+            nueva_hora = (hora_actual - 1) % 24
+
+            # Actualizar el recordatorio
+            db.clima.update_one(
+                {"_id": recordatorio["_id"]},
+                {"$set": {"hora_config.hora": nueva_hora}}
+            )
+
+        logger.info("Hora de recordatorios de clima ajustada correctamente")
+        return True
+    except Exception as e:
+        logger.error(
+            f"Error al ajustar hora de recordatorios: {e}", exc_info=True)
+        return False

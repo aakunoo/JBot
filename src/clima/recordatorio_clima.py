@@ -114,7 +114,6 @@ async def seleccionar_zona_diario(update: Update, context: ContextTypes.DEFAULT_
     nuevo_id = crear_suscripcion_clima(
         chat_id, nombre, provincia, hora_obj)  # <-- devuelve el _id
     record_id = str(nuevo_id)
-    crear_suscripcion_clima(chat_id, nombre, provincia, hora_obj)
 
     programar_recordatorio_diario_clima(
         context, chat_id, provincia, hora, zona, nombre, record_id)

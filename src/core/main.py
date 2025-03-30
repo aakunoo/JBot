@@ -10,6 +10,7 @@ from src.rpi.rpi_settings import get_system_info
 from src.rpi.rpi_config import get_config_handler
 from src.config.settings import BOT_CONFIG, LOG_CONFIG
 from src.utils.logger import setup_logger
+from src.database.models import ajustar_hora_recordatorios_clima
 
 # Configurar logging
 setup_logger()
@@ -25,6 +26,9 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     try:
+        # Ajustar hora de recordatorios existentes
+        ajustar_hora_recordatorios_clima()
+
         app = ApplicationBuilder().token(BOT_CONFIG["token"]).build()
 
         # Reprogramar recordatorios existentes al arrancar el bot
