@@ -1,66 +1,65 @@
-# tests/conftest.py
-import mongomock
-import pytest
-import types
-from types import SimpleNamespace
-import sys
+import sys, types, pytest, mongomock
 from telegram import User, Update
-from telegram.ext import CallbackContext
+from types import SimpleNamespace
 
-
-# 1 Crear un "MongoClient" de pruebas
+# ── 1. Parche global de PyMongo → mongomock ──────────────────────────
 _mock_client = mongomock.MongoClient()
 
-# 2 Construir un módulo falso que imita `pymongo`
-pymongo_fake = types.ModuleType("pymongo")
-pymongo_fake.MongoClient = lambda *a, **k: _mock_client
-pymongo_fake.errors = types.SimpleNamespace(ServerSelectionTimeoutError=Exception)
-# opcionalmente:
-pymongo_fake.ReturnDocument = types.SimpleNamespace(AFTER=1)
 
 class _DummySession:
-    def __enter__(self):        # with client.start_session() as s:
-        return self
-    def __exit__(self, exc_type, exc, tb):   # sale del with
-        return False
-    def start_transaction(self, *a, **k):    # no hace nada
-        pass
-    def commit_transaction(self):            # idem
-        pass
-    def abort_transaction(self):             # idem
-        pass
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc, tb): return False
+    def start_transaction(self, *a, **k): return self
+    def commit_transaction(self): pass
+    def abort_transaction(self): pass
+    def end_session(self): pass
+
 
 _mock_client.start_session = lambda *a, **k: _DummySession()
 
-# 3 Inyectar el módulo falso en `sys.modules`
+pymongo_fake = types.ModuleType("pymongo")
+pymongo_fake.MongoClient = lambda *a, **k: _mock_client
+pymongo_fake.errors = types.SimpleNamespace(ServerSelectionTimeoutError=Exception)
 sys.modules["pymongo"] = pymongo_fake
+# ─────────────────────────────────────────────────────────────────────
 
-# ---------- fixture de base de datos ---------- #
+# ── 2. Fixture de base de datos aislada ──────────────────────────────
 @pytest.fixture()
 def db(monkeypatch):
-    """MongoDB en memoria, sustituye al cliente real."""
-    client = mongomock.MongoClient()
-    from src.database import models           # se importa aquí para que exista primero el client
-    monkeypatch.setattr(models, "db", client["jbot"])
-    yield client["jbot"]                      # ‹return› para el test
-    client.close()
+    from src.database import models
+    monkeypatch.setattr(models, "db", _mock_client["jbot"])
+    yield _mock_client["jbot"]
+    _mock_client.drop_database("jbot")
+# ─────────────────────────────────────────────────────────────────────
 
-# ---------- helpers de objetos Telegram ------- #
-def _fake_update(user_id=1, username="tester"):
+# ── 3. Stubs de Telegram Update + Context ────────────────────────────
+async def _reply_async(*_a, **_kw):
+    """Versión asíncrona de reply_text que no hace nada."""
+    return None
+
+
+def _fake_update(user_id: int = 1, username: str = "tester"):
     tg_user = User(id=user_id, first_name=username, is_bot=False, username=username)
-    message = type("Msg", (), {
-        "from_user": tg_user,
-        "text": "",
-        "reply_text": lambda *_1, **_2: None,   # stub
-    })
+    chat_stub = type("Chat", (), {"id": user_id})
+    message = type(
+        "Msg",
+        (),
+        {
+            "from_user": tg_user,
+            "chat": chat_stub,
+            "text": "",
+            "reply_text": _reply_async,
+        },
+    )
     return Update(update_id=999, message=message)
+
 
 @pytest.fixture()
 def fake_update():
     return _fake_update()
 
+
 @pytest.fixture()
 def fake_context():
-    """Objeto mínimo que imita telegram.ext.CallbackContext."""
-    fake_bot = SimpleNamespace(send_message=lambda *a, **k: None)
-    return SimpleNamespace(bot=fake_bot)
+    fake_bot = SimpleNamespace(send_message=_reply_async)
+    return SimpleNamespace(bot=fake_bot, args=[])
