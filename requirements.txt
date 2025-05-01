@@ -9,3 +9,4 @@ pytest-mock
 mongomock
 requests-mock
 coverage
+pytest-cov
