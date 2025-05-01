@@ -1,5 +1,5 @@
 import pytest, requests_mock
-from src.core.commands import comando_clima
+from src.clima.clima_bot import comando_clima
 
 @pytest.mark.asyncio
 async def test_comando_clima(fake_update, fake_context):
