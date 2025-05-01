@@ -1,4 +1,4 @@
-# JBot
+# JBot   [![CI](https://github.com/aakunoo/JBot/actions/workflows/ci.yml/badge.svg)](https://github.com/aakunoo/JBot/actions/workflows/ci.yml)
 
 This repository hosts a **Telegram Bot** built in **Python**, designed to run
 **24/7** on a **Raspberry Pi**. It uses **Docker** containers for streamlined
@@ -15,3 +15,5 @@ deployment, ensuring minimal downtime and ease of maintenance.
 
 This project is licensed under the [MIT License](./LICENSE).  
 Feel free to use and modify according to the terms specified.
+
+
