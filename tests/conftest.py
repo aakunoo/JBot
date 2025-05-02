@@ -1,7 +1,30 @@
 import sys, types, pytest, mongomock
 from telegram import User, Update
 from types import SimpleNamespace
+import pymongo
 
+@pytest.fixture()
+def real_db(monkeypatch):
+    """
+    Devuelve una base de datos Mongo que existe de verdad
+    (localhost:27017).  Limpia las colecciones antes y después
+    de cada prueba y la inyecta en src.database.models.
+    """
+    client = pymongo.MongoClient("mongodb://localhost:27017/")
+    db = client["jbot_test"]
+
+    # Garantizamos tabla rasa
+    for col in ("usuarios", "recordatorios", "clima"):
+        db[col].delete_many({})
+
+    # Sobrescribimos la BD que usan los modelos
+    from src.database import models
+    monkeypatch.setattr(models, "db", db)
+
+    yield db          # ← aquí se ejecuta la prueba
+
+    client.drop_database("jbot_test")
+    
 # ── 1. Parche global de PyMongo → mongomock ──────────────────────────
 _mock_client = mongomock.MongoClient()
 
@@ -63,3 +86,4 @@ def fake_update():
 def fake_context():
     fake_bot = SimpleNamespace(send_message=_reply_async)
     return SimpleNamespace(bot=fake_bot, args=[])
+
