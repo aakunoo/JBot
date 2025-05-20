@@ -123,12 +123,12 @@ def programar_recordatorio(context, recordatorio, record_id=None):
     Programa en el JobQueue el inicio, la repetición y el fin del recordatorio,
     usando los datos del dict 'recordatorio'.
 
-    - recordatorio: dict con claves como "chat_id", "titulo", "descripcion",
+    - recordatorio: dict con claves como "user_id", "titulo", "descripcion",
       "fecha_hora_inicio", "frecuencia", "fecha_hora_fin", "zona_horaria".
     - record_id: id del recordatorio en la base de datos (string u ObjectId),
       para poder cancelarlo luego buscando job.data["record_id"] == record_id.
     """
-    chat_id = recordatorio["chat_id"]
+    user_id = recordatorio["user_id"]
     titulo = recordatorio.get("titulo", "")
     descripcion = recordatorio.get("descripcion", "")
     fecha_inicio = recordatorio.get("fecha_hora_inicio")
@@ -146,7 +146,7 @@ def programar_recordatorio(context, recordatorio, record_id=None):
         context.job_queue.run_once(
             enviar_recordatorio_inicio,
             when=fecha_inicio_utc,
-            chat_id=chat_id,
+            chat_id=user_id,  # Usamos user_id como chat_id para mensajes privados
             name=f"record_inicio_{record_id}",
             data={
                 "record_id": record_id,
@@ -165,7 +165,7 @@ def programar_recordatorio(context, recordatorio, record_id=None):
             enviar_recordatorio_repeticion,
             interval=interval,
             first=first_moment,
-            chat_id=chat_id,
+            chat_id=user_id,  # Usamos user_id como chat_id para mensajes privados
             name=f"record_rep_{record_id}",
             data={
                 "record_id": record_id,
@@ -199,7 +199,7 @@ def programar_recordatorio(context, recordatorio, record_id=None):
         context.job_queue.run_once(
             enviar_recordatorio_fin,
             when=fecha_fin_utc,
-            chat_id=chat_id,
+            chat_id=user_id,  # Usamos user_id como chat_id para mensajes privados
             name=f"record_fin_{record_id}",
             data={
                 "record_id": record_id,

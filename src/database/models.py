@@ -13,12 +13,13 @@ db = get_db()
 
 
 @execute_transaction
-def register_user(chat_id, apodo, username=None):
+def register_user(chat_id, user_id, apodo, username=None):
     """
     Registra un nuevo usuario en la base de datos.
 
     Args:
-        chat_id: ID del chat del usuario
+        chat_id: ID del chat (grupo o privado)
+        user_id: ID del usuario de Telegram
         apodo: Apodo del usuario
         username: Username de Telegram del usuario (opcional)
 
@@ -30,19 +31,21 @@ def register_user(chat_id, apodo, username=None):
             logger.warning(f"Chat ID inválido: {chat_id}")
             return False
 
-        if db.usuarios.find_one({"chat_id": chat_id}):
-            logger.info(f"Usuario ya registrado: {chat_id}")
+        # Verificar si el usuario ya está registrado (por user_id)
+        if db.usuarios.find_one({"user_id": user_id}):
+            logger.info(f"Usuario ya registrado: {user_id}")
             return False
 
         data_usuario = {
             "chat_id": chat_id,
+            "user_id": user_id,
             "apodo": sanitize_text(apodo),
             "username": sanitize_text(username) if username else None,
             "registro": datetime.now(timezone.utc)
         }
         db.usuarios.insert_one(data_usuario)
         logger.info(
-            f"Usuario registrado: {chat_id} (apodo: {apodo}, username: {username})")
+            f"Usuario registrado: {user_id} (apodo: {apodo}, username: {username})")
         return True
     except Exception as e:
         logger.error(f"Error al registrar usuario: {e}", exc_info=True)
@@ -50,10 +53,10 @@ def register_user(chat_id, apodo, username=None):
 
 
 @execute_transaction
-def crear_recordatorio(chat_id, titulo, descripcion, fecha_hora_inicio, frecuencia, fecha_hora_fin, zona_horaria):
+def crear_recordatorio(user_id, titulo, descripcion, fecha_hora_inicio, frecuencia, fecha_hora_fin, zona_horaria):
     try:
         documento = {
-            "chat_id": chat_id,
+            "user_id": user_id,
             "titulo": sanitize_text(titulo),
             "descripcion": sanitize_text(descripcion),
             "fecha_hora_inicio": fecha_hora_inicio,
@@ -63,7 +66,7 @@ def crear_recordatorio(chat_id, titulo, descripcion, fecha_hora_inicio, frecuenc
             "creado_en": datetime.now(timezone.utc)
         }
         resultado = db.recordatorios.insert_one(documento)
-        logger.info(f"Recordatorio creado para usuario {chat_id}")
+        logger.info(f"Recordatorio creado para usuario {user_id}")
         return resultado.inserted_id
     except Exception as e:
         logger.error(f"Error al crear recordatorio: {e}", exc_info=True)
@@ -71,7 +74,7 @@ def crear_recordatorio(chat_id, titulo, descripcion, fecha_hora_inicio, frecuenc
 
 
 @execute_transaction
-def crear_suscripcion_clima(chat_id, nombre_usuario, provincia, hora_config):
+def crear_suscripcion_clima(user_id, nombre_usuario, provincia, hora_config):
     try:
         provincia_sanitizada = sanitize_provincia(provincia)
         if not provincia_sanitizada:
@@ -79,14 +82,14 @@ def crear_suscripcion_clima(chat_id, nombre_usuario, provincia, hora_config):
             return False
 
         documento = {
-            "chat_id": chat_id,
+            "user_id": user_id,
             "nombre_usuario": sanitize_text(nombre_usuario),
             "provincia": provincia_sanitizada,
             "hora_config": hora_config,
             "creado_en": datetime.now(timezone.utc)
         }
         db.clima.insert_one(documento)
-        logger.info(f"Suscripción de clima creada para usuario {chat_id}")
+        logger.info(f"Suscripción de clima creada para usuario {user_id}")
         return True
     except Exception as e:
         logger.error(
@@ -94,7 +97,13 @@ def crear_suscripcion_clima(chat_id, nombre_usuario, provincia, hora_config):
         return False
 
 
-def get_user(chat_id):
+def get_user(user_id):
+    """Obtiene un usuario por su user_id"""
+    return db.usuarios.find_one({"user_id": user_id})
+
+
+def get_user_by_chat_id(chat_id):
+    """Obtiene un usuario por su chat_id"""
     return db.usuarios.find_one({"chat_id": chat_id})
 
 
@@ -106,8 +115,8 @@ def delete_user(chat_id):
     return db.usuarios.delete_one({"chat_id": chat_id})
 
 
-def obtener_recordatorios(chat_id=None):
-    query = {"chat_id": chat_id} if chat_id is not None else {}
+def obtener_recordatorios(user_id=None):
+    query = {"user_id": user_id} if user_id is not None else {}
     return list(db.recordatorios.find(query))
 
 
@@ -116,8 +125,8 @@ def eliminar_recordatorio_por_id(id_recordatorio):
     return db.recordatorios.delete_one({"_id": ObjectId(id_recordatorio)})
 
 
-def obtener_recordatorios_clima(chat_id):
-    return list(db.clima.find({"chat_id": chat_id}))
+def obtener_recordatorios_clima(user_id):
+    return list(db.clima.find({"user_id": user_id}))
 
 
 def eliminar_recordatorio_clima(id_recordatorio):
@@ -179,12 +188,12 @@ def ajustar_hora_recordatorios_clima():
         return False
 
 
-def update_user_nickname(chat_id: int, nuevo_apodo: str) -> bool:
+def update_user_nickname(user_id: int, nuevo_apodo: str) -> bool:
     """
     Actualiza el apodo de un usuario.
 
     Args:
-        chat_id: ID del chat del usuario
+        user_id: ID del usuario de Telegram
         nuevo_apodo: Nuevo apodo para el usuario
 
     Returns:
@@ -192,10 +201,10 @@ def update_user_nickname(chat_id: int, nuevo_apodo: str) -> bool:
     """
     try:
         result = db.usuarios.update_one(
-            {"chat_id": chat_id},
+            {"user_id": user_id},
             {"$set": {"apodo": sanitize_text(nuevo_apodo)}}
         )
-        logger.info(f"Apodo actualizado para usuario {chat_id}")
+        logger.info(f"Apodo actualizado para usuario {user_id}")
         return result.modified_count > 0
     except Exception as e:
         logger.error(f"Error al actualizar apodo: {e}")

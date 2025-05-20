@@ -52,7 +52,8 @@ async def comando_registro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Si no se proporciona un apodo, solicita al usuario que lo introduzca.
     """
     chat_id = update.effective_chat.id
-    user = get_user(chat_id)
+    user_id = update.effective_user.id
+    user = get_user(user_id)
 
     if user:
         await update.message.reply_text(
@@ -82,7 +83,7 @@ async def comando_registro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_username = update.effective_user.username if update.effective_user else None
 
     # Registrar usuario
-    if register_user(chat_id, apodo, telegram_username):
+    if register_user(chat_id, user_id, apodo, telegram_username):
         await update.message.reply_text(
             f"¡Registro exitoso! Tu apodo es: {apodo}\n"
             "Puedes cambiarlo en cualquier momento usando /setnickname <nuevo_apodo>"
@@ -97,7 +98,8 @@ async def comando_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     try:
         chat_id = update.effective_chat.id
-        user = get_user(chat_id)
+        user_id = update.effective_user.id
+        user = get_user(user_id)
 
         if not user:
             await update.message.reply_text(
@@ -122,7 +124,7 @@ async def comando_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not es_valido:
             await update.message.reply_text(f"Error: {mensaje_error}")
             return
-        if update_user_nickname(chat_id, nuevo_apodo):
+        if update_user_nickname(user_id, nuevo_apodo):
             await update.message.reply_text(f"¡Apodo actualizado! Tu nuevo apodo es: {nuevo_apodo}")
         else:
             await update.message.reply_text("Error al actualizar el apodo. Por favor, intenta de nuevo.")

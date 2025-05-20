@@ -5,6 +5,7 @@ from src.config.settings import SECURITY_CONFIG
 from src.database.models import get_user
 from src.utils.logger import setup_logger
 import logging
+from telegram import Update
 
 from src.core.permissions import can_manage_system
 
@@ -34,16 +35,26 @@ def record_attempt(chat_id: int):
     logger.debug(f"Intento registrado para chat_id {chat_id}")
 
 
-def check_command_permissions(chat_id: int, command: str) -> bool:
+def check_command_permissions(update: Update, command: str) -> bool:
     """Verifica si el usuario tiene permisos para ejecutar un comando"""
+    user_id = update.effective_user.id
+    
+    # Comandos públicos que no requieren registro
     if command in ["/start", "/help", "/register"]:
         return True
-    if not get_user(chat_id):
+        
+    # Verificar si el usuario está registrado
+    if not get_user(user_id):
         return False
-    if command in ["/clima", "/recordatorios"]:
+        
+    # Comandos para usuarios registrados
+    if command in ["/clima", "/recordatorios", "/setnickname"]:
         return True
-    if command in ["/RSettings"]:
-        return can_manage_system(chat_id)
+        
+    # Comandos solo para administradores
+    if command in ["/config"]:
+        return is_admin(user_id)
+        
     return False
 
 

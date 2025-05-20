@@ -98,13 +98,13 @@ async def seleccionar_zona_diario(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
     zona = query.data
-    chat_id = query.message.chat_id
+    user_id = query.from_user.id
 
     provincia = context.user_data.get("provincia_diario")
     hora = context.user_data.get("hora_diario")
 
     from src.database.models import get_user
-    usuario = get_user(chat_id)
+    usuario = get_user(user_id)
     if usuario and usuario.get("apodo"):
         nombre = usuario["apodo"]
     else:
@@ -112,11 +112,11 @@ async def seleccionar_zona_diario(update: Update, context: ContextTypes.DEFAULT_
 
     hora_obj = {"hora": hora.hour, "minuto": hora.minute, "zona": zona}
     nuevo_id = crear_suscripcion_clima(
-        chat_id, nombre, provincia, hora_obj)  # <-- devuelve el _id
+        user_id, nombre, provincia, hora_obj)  # <-- devuelve el _id
     record_id = str(nuevo_id)
 
     programar_recordatorio_diario_clima(
-        context, chat_id, provincia, hora, zona, nombre, record_id)
+        context, user_id, provincia, hora, zona, nombre, record_id)
 
     await query.edit_message_text(
         f"Se ha creado un recordatorio diario para el clima de {provincia} a las {hora.strftime('%H:%M')} {zona}."

@@ -9,6 +9,7 @@ from telegram.ext import (
 )
 from datetime import datetime
 from src.database.models import get_user, crear_recordatorio
+from src.reminders.mensaje_recordatorios import programar_recordatorio
 from src.utils.logger import setup_logger
 import logging
 
@@ -37,8 +38,8 @@ async def menu_recordatorios(update: Update, context: ContextTypes.DEFAULT_TYPE)
     Punto de entrada si el usuario escribe /recordatorios directamente.
     Verificamos el registro.
     """
-    chat_id = update.effective_chat.id
-    if not get_user(chat_id):
+    user_id = update.effective_user.id
+    if not get_user(user_id):
         await update.message.reply_text("Primero debes registrarte con /register.")
         return ConversationHandler.END
 
@@ -87,8 +88,8 @@ async def recordatorios_menu_callback(update: Update, context: ContextTypes.DEFA
     await query.answer()
 
     # Verificar registro de nuevo aquí por seguridad
-    chat_id = query.message.chat_id
-    if not get_user(chat_id):
+    user_id = query.from_user.id
+    if not get_user(user_id):
         await query.edit_message_text("Primero debes registrarte con /register.")
         return ConversationHandler.END
 
@@ -119,8 +120,8 @@ async def recordatorios_menu_callback(update: Update, context: ContextTypes.DEFA
 
 
 async def pedir_titulo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    if not get_user(chat_id):
+    user_id = update.effective_user.id
+    if not get_user(user_id):
         await update.message.reply_text("Primero debes registrarte con /register.")
         return ConversationHandler.END
 
@@ -147,8 +148,8 @@ async def confirmar_descripcion(update, context):
     query = update.callback_query
     await query.answer()
 
-    chat_id = query.message.chat_id
-    if not get_user(chat_id):
+    user_id = query.from_user.id
+    if not get_user(user_id):
         await query.edit_message_text("Primero debes registrarte con /register.")
         return ConversationHandler.END
 
@@ -172,8 +173,8 @@ async def confirmar_descripcion(update, context):
 
 
 async def pedir_descripcion(update, context):
-    chat_id = update.effective_chat.id
-    if not get_user(chat_id):
+    user_id = update.effective_user.id
+    if not get_user(user_id):
         await update.message.reply_text("Primero debes registrarte con /register.")
         return ConversationHandler.END
 
@@ -190,8 +191,8 @@ async def pedir_descripcion(update, context):
 
 
 async def pedir_fecha_inicio(update, context):
-    chat_id = update.effective_chat.id
-    if not get_user(chat_id):
+    user_id = update.effective_user.id
+    if not get_user(user_id):
         await update.message.reply_text("Primero debes registrarte con /register.")
         return ConversationHandler.END
 
@@ -233,8 +234,8 @@ async def seleccionar_frecuencia(update, context):
     query = update.callback_query
     await query.answer()
 
-    chat_id = query.message.chat_id
-    if not get_user(chat_id):
+    user_id = query.from_user.id
+    if not get_user(user_id):
         await query.edit_message_text("Primero debes registrarte con /register.")
         return ConversationHandler.END
 
@@ -275,8 +276,8 @@ async def seleccionar_frecuencia(update, context):
 
 
 async def pedir_valor_cada_x(update, context):
-    chat_id = update.effective_chat.id
-    if not get_user(chat_id):
+    user_id = update.effective_user.id
+    if not get_user(user_id):
         await update.message.reply_text("Primero debes registrarte con /register.")
         return ConversationHandler.END
 
@@ -305,8 +306,8 @@ async def pedir_valor_cada_x(update, context):
 
 
 async def pedir_fecha_fin(update, context):
-    chat_id = update.effective_chat.id
-    if not get_user(chat_id):
+    user_id = update.effective_user.id
+    if not get_user(user_id):
         await update.message.reply_text("Primero debes registrarte con /register.")
         return ConversationHandler.END
 
@@ -378,30 +379,23 @@ def generar_teclado_zonas():
     return filas
 
 
-async def seleccionar_zona_horaria(update, context):
+async def seleccionar_zona_horaria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Recoge la zona horaria seleccionada, crea el recordatorio en la BD,
-    y programa el job con un record_id en job.data para cancelarlo
-    cuando se elimine o finalice.
+    Callback que se ejecuta cuando el usuario selecciona una zona horaria.
+    Crea el recordatorio en la BD y programa los jobs.
     """
     query = update.callback_query
     await query.answer()
-
-    chat_id = query.message.chat_id
-    if not get_user(chat_id):
-        await query.edit_message_text("Primero debes registrarte con /register.")
-        return ConversationHandler.END
-
     zona = query.data
-    context.user_data["nuevo_recordatorio"]["zona_horaria"] = zona
+    user_id = query.from_user.id
 
+    # Recuperamos los datos guardados
     datos = context.user_data["nuevo_recordatorio"]
-    from src.database import crear_recordatorio
-    from src.reminders.mensaje_recordatorios import programar_recordatorio
+    datos["zona_horaria"] = zona
 
-    # 1) Insertar en BD
+    # Creamos el recordatorio en la BD
     id_insertado = crear_recordatorio(
-        chat_id=chat_id,
+        user_id=user_id,
         titulo=datos["titulo"],
         descripcion=datos["descripcion"],
         fecha_hora_inicio=datos["fecha_inicio"],
@@ -410,9 +404,9 @@ async def seleccionar_zona_horaria(update, context):
         zona_horaria=datos["zona_horaria"]
     )
 
-    # 2) Programar job, pasando record_id para poder cancelarlo luego
+    # Preparamos el diccionario para programar_recordatorio
     r = {
-        "chat_id": chat_id,
+        "user_id": user_id,
         "titulo": datos["titulo"],
         "descripcion": datos["descripcion"],
         "fecha_hora_inicio": datos["fecha_inicio"],
@@ -420,12 +414,18 @@ async def seleccionar_zona_horaria(update, context):
         "fecha_hora_fin": datos["fecha_fin"],
         "zona_horaria": datos["zona_horaria"]
     }
+
+    # Programamos los jobs
     programar_recordatorio(context, r, record_id=str(id_insertado))
 
-    usuario = get_user(chat_id)
-    await query.edit_message_text(text="¡Tu recordatorio ha sido creado!")
-    print(
-        f"El usuario {usuario} con ID {chat_id} ha creado recordatorio con ID {id_insertado}")
+    await query.edit_message_text(
+        f"¡Recordatorio creado!\n\n"
+        f"Título: {datos['titulo']}\n"
+        f"Descripción: {datos['descripcion']}\n"
+        f"Fecha de inicio: {datos['fecha_inicio'].strftime('%Y-%m-%d %H:%M')}\n"
+        f"Frecuencia: {datos['frecuencia']['tipo']}\n"
+        f"Zona horaria: {zona}"
+    )
     return ConversationHandler.END
 
 

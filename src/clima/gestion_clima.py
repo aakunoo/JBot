@@ -196,7 +196,7 @@ def convertir_a_utc(fecha_naive, zona_str):
     return fecha_local.astimezone(timezone.utc)
 
 
-def programar_recordatorio_diario_clima(context, chat_id, provincia, hora_programada, zona_horaria, nombre, record_id):
+def programar_recordatorio_diario_clima(context, user_id, provincia, hora_programada, zona_horaria, nombre, record_id):
     """
     Programa un job repetitivo diario que, a la hora local especificada (convertida a UTC),
     envíe el recordatorio de clima. Se incluye record_id en job.data para poder
@@ -217,7 +217,7 @@ def programar_recordatorio_diario_clima(context, chat_id, provincia, hora_progra
         enviar_recordatorio_diario_clima,
         interval=interval,
         first=fecha_programada,
-        chat_id=chat_id,
+        chat_id=user_id,  # Usamos user_id como chat_id para mensajes privados
         name=f"clima_{record_id}",
         data={
             "provincia": provincia,

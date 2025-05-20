@@ -47,10 +47,10 @@ def _connect_with_retry():
 def _setup_indexes():
     try:
         # Crear índices necesarios
-        _db.usuarios.create_index("chat_id", unique=True)
+        _db.usuarios.create_index("user_id", unique=True)
         _db.recordatorios.create_index(
-            [("chat_id", 1), ("fecha_hora_inicio", 1)])
-        _db.clima.create_index([("chat_id", 1), ("provincia", 1)])
+            [("user_id", 1), ("fecha_hora_inicio", 1)])
+        _db.clima.create_index([("user_id", 1), ("provincia", 1)])
         logger.info("Índices creados correctamente")
     except OperationFailure as e:
         logger.error(f"Error al crear índices: {e}")

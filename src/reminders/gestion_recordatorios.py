@@ -10,13 +10,13 @@ Muestra todos los recordatorios del usuario con el chat_id que corresponde
 ---------------------------------------------------------------------------
 '''
 async def mostrar_recordatorios(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
     mensaje = update.message if update.message else update.callback_query.message
-    if not get_user(chat_id):
+    if not get_user(user_id):
         await mensaje.reply_text("Primero debes registrarte con /register.")
         return
 
-    lista = obtener_recordatorios(chat_id)
+    lista = obtener_recordatorios(user_id)
     if not lista:
         await mensaje.reply_text("No tienes recordatorios.")
         return
@@ -40,13 +40,13 @@ Función para iniciar la eliminación de recordatorios
 ---------------------------------------------------------------------------
 '''
 async def eliminar_recordatorios(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
     mensaje = update.message if update.message else update.callback_query.message
-    if not get_user(chat_id):
+    if not get_user(user_id):
         await mensaje.reply_text("Primero debes registrarte con /register.")
         return
 
-    lista = obtener_recordatorios(chat_id)
+    lista = obtener_recordatorios(user_id)
     if not lista:
         await mensaje.reply_text("No tienes recordatorios para eliminar.")
         return
@@ -71,8 +71,8 @@ async def procesar_eliminar_recordatorio(update: Update, context: ContextTypes.D
     query = update.callback_query
     await query.answer()
     data = query.data
-    chat_id = update.effective_chat.id
-    usuario = get_user(chat_id)
+    user_id = query.from_user.id
+    usuario = get_user(user_id)
 
     if data.startswith("eliminar_"):
         recordatorio_id = data[len("eliminar_"):]

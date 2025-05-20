@@ -87,8 +87,8 @@ async def comando_clima(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Si no, desplegamos el menú principal (Clima actual,
     Recordatorio diario, Gestionar recordatorios).
     '''
-    chat_id = update.effective_chat.id
-    if not get_user(chat_id):
+    user_id = update.effective_user.id
+    if not get_user(user_id):
         await update.message.reply_text("Primero debes registrarte con /register.")
         return ConversationHandler.END
 
@@ -276,8 +276,8 @@ async def mostrar_recordatorios_clima_eliminar(query, context):
     Muestra un listado de botones con cada recordatorio de clima,
     para que el usuario seleccione cuál desea eliminar.
     '''
-    chat_id = query.message.chat_id
-    lista = obtener_recordatorios_clima(chat_id)
+    user_id = query.from_user.id
+    lista = obtener_recordatorios_clima(user_id)
     if not lista:
         await query.edit_message_text("No tienes recordatorios de clima.")
         return ConversationHandler.END
@@ -318,8 +318,8 @@ async def mostrar_recordatorios_clima_editar(query, context):
     Muestra un listado de recordatorios de clima para que el usuario
     seleccione cuál quiere editar (cambiando hora y zona).
     '''
-    chat_id = query.message.chat_id
-    lista = obtener_recordatorios_clima(chat_id)
+    user_id = query.from_user.id
+    lista = obtener_recordatorios_clima(user_id)
     if not lista:
         await query.edit_message_text("No tienes recordatorios de clima.")
         return ConversationHandler.END
