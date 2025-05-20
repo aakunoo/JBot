@@ -23,7 +23,10 @@ def validate_username(username: str) -> bool:
 
 def validate_chat_id(chat_id: int) -> bool:
     """
-    Valida que el chat_id sea un número entero positivo.
+    Valida que el chat_id sea un número entero válido.
+    En Telegram, los IDs de chat pueden ser:
+    - Positivos: para chats privados
+    - Negativos: para grupos y supergrupos
 
     Args:
         chat_id: ID del chat a validar
@@ -32,7 +35,7 @@ def validate_chat_id(chat_id: int) -> bool:
         bool: True si el chat_id es válido, False en caso contrario
     """
     try:
-        return isinstance(chat_id, int) and chat_id > 0
+        return isinstance(chat_id, int) and chat_id != 0
     except Exception:
         return False
 
