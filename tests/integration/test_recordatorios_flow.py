@@ -23,7 +23,7 @@ async def test_recordatorio_completo(real_db):  # real_db = fixture con Mongo re
 
     # 1) Usuario de pruebas
     chat_id = 77
-    models.register_user(chat_id=chat_id, username="tester", apodo="tester")
+    models.register_user(chat_id=chat_id, user_id=chat_id, username="tester", apodo="tester")
 
     # 2) Creamos recordatorio para dentro de 5 minutos
     inicio = datetime.now(timezone.utc) + timedelta(minutes=5)

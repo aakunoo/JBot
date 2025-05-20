@@ -8,6 +8,7 @@ async def test_comando_clima(fake_update, fake_context, db):
     # Registro un usuario ficticio para que get_user() devuelva datos
     models.register_user(
         chat_id=fake_update.message.chat.id,
+        user_id=fake_update.message.chat.id,
         username="tester",
         apodo="tester",
     )
